@@ -1,0 +1,195 @@
+Wichtigste Commands:
+
+Server launch
+
+1.) 1.cmd docker:
+backend\
+
+docker compose up
+
+2.) 2. cmd backend:
+backend\
+
+.\.venv\Scripts\activate.bat
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 9000
+
+3.) 3. cmd
+
+stripe listen --forward-to http://localhost:8000/webhooks/stripe
+
+4.) 4. cmd
+frontend\
+
+npm run dev
+
+Migrations Commands:
+backend\
+
+.\.venv\Scripts\alembic current
+
+.\.venv\Scripts\alembic upgrade head
+
+docs login:
+HOST
+{
+  "email": "svendavidwolff99@gmail.com",
+  "password": "Gallanaturi#19"
+}
+
+GUEST
+{
+  "email": "user@example.cum",
+  "password": "stringut"
+}
+
+docs login via CMD:
+
+curl -X POST http://127.0.0.1:8000/auth/login ^
+-H "Content-Type: application/json" ^
+-d "{\"email\":\"svendavidwolff99@gmail.com\",\"password\":\"Gallanaturi#19\"}"
+
+access token:
+
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkYmEyY2NmMS03MDM4LTRkYzctOWY0OS1mZWNkYmU4Mzk4OGUiLCJpYXQiOjE3NzE4MDQ0NTcsImV4cCI6MTc3MjQwOTI1N30.ONuJqAokdxajMUK2_joawC4H7-SOGoy04fCuSe_WZWs
+
+
+Powershell:
+
+
+Erstelle structure.txt Zusammenfassung:
+
+tree /f /a > structure.txt
+
+
+Erstelle backend_code.txt Zusammenfassung:
+
+(Get-ChildItem backend -Recurse -Include *.py | Where-Object { $_.FullName -notmatch '\.venv' } |
+ForEach-Object {
+"`n===== $($_.FullName.Replace((Get-Location).Path,'')) =====`n";
+Select-String -Path $_.FullName -Pattern 'class |def |APIRouter|@router|include_router|__tablename__|Column\(|ForeignKey'
+}) | Out-File backend_code.txt
+
+
+Mit mehr Details:
+
+$Root   = Join-Path (Get-Location) 'backend'
+$Output = Join-Path (Get-Location) 'backend_code_summary.txt'
+
+if (-not (Test-Path $Root)) { throw "Can't find folder: $Root (run this from the project root that contains .\backend)" }
+
+Remove-Item $Output -ErrorAction SilentlyContinue
+New-Item -ItemType File -Path $Output -Force | Out-Null
+
+$exts = @('.py','.env','.yml','.yaml','.json','.toml','.ini','.txt','.md','.sql')
+$exclude = '\\\.venv\\|\\site-packages\\|\\__pycache__\\|\\\.git\\|\\\.mypy_cache\\|\\\.pytest_cache\\|\\node_modules\\|\\dist\\|\\build\\'
+
+Get-ChildItem -Path $Root -Recurse -File | Where-Object {
+  ($exts -contains $_.Extension.ToLowerInvariant()) -and ($_.FullName -notmatch $exclude)
+} | ForEach-Object {
+  Add-Content -Path $Output -Encoding UTF8 -Value ""
+  Add-Content -Path $Output -Encoding UTF8 -Value ("===== FILE: " + $_.FullName + " =====")
+  Add-Content -Path $Output -Encoding UTF8 -Value ""
+  Get-Content -Path $_.FullName -ErrorAction SilentlyContinue | Add-Content -Path $Output -Encoding UTF8
+}
+
+Write-Host "Done -> $Output"
+
+
+AI Audit Pack
+
+# Run from your repo root (the folder that contains "backend\")
+$Root = (Get-Location).Path
+$OutDir = Join-Path $Root "out"
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
+# What to include (adjust as needed)
+$IncludeExt = @("*.py","*.ini","*.yml","*.yaml","*.toml","*.env","requirements*.txt","docker-compose*.yml")
+
+# What to exclude (important: drop .venv and caches)
+$ExcludeDirRegex = '\\(\.venv|__pycache__|\.git|node_modules|dist|build|\.pytest_cache|\.mypy_cache)\b'
+
+# Collect files
+$Files = Get-ChildItem -Path $Root -Recurse -File -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -notmatch $ExcludeDirRegex } |
+  Where-Object {
+    $name = $_.Name
+    foreach ($pat in $IncludeExt) { if ($name -like $pat) { return $true } }
+    return $false
+  } |
+  Sort-Object FullName
+
+# Manifest (paths + hashes) so an AI can reason about completeness
+$Manifest = $Files | ForEach-Object {
+  $rel = Resolve-Path -LiteralPath $_.FullName | ForEach-Object { $_.Path.Substring($Root.Length).TrimStart('\') }
+  [PSCustomObject]@{
+    path = $rel
+    bytes = $_.Length
+    lastWriteTime = $_.LastWriteTimeUtc.ToString("o")
+    sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash
+  }
+}
+$Manifest | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 (Join-Path $OutDir "manifest.json")
+
+# Chunked concatenation
+$MaxChunkBytes = 250KB   # tune for your AI input limits
+$chunkIndex = 1
+$chunkPath = Join-Path $OutDir ("chunk_{0:D4}.txt" -f $chunkIndex)
+$chunkBytes = 0
+
+"" | Set-Content -Encoding UTF8 $chunkPath
+
+foreach ($f in $Files) {
+  $rel = Resolve-Path -LiteralPath $f.FullName | ForEach-Object { $_.Path.Substring($Root.Length).TrimStart('\') }
+
+  $header = "`n`n===== FILE: $rel =====`n"
+  $content = Get-Content -LiteralPath $f.FullName -Raw -ErrorAction SilentlyContinue
+
+  # Estimate bytes (UTF8)
+  $block = $header + $content
+  $blockBytes = [System.Text.Encoding]::UTF8.GetByteCount($block)
+
+  if (($chunkBytes + $blockBytes) -gt $MaxChunkBytes -and $chunkBytes -gt 0) {
+    $chunkIndex++
+    $chunkPath = Join-Path $OutDir ("chunk_{0:D4}.txt" -f $chunkIndex)
+    "" | Set-Content -Encoding UTF8 $chunkPath
+    $chunkBytes = 0
+  }
+
+  Add-Content -Encoding UTF8 -LiteralPath $chunkPath -Value $block
+  $chunkBytes += $blockBytes
+}
+
+"Done. Wrote manifest.json and $chunkIndex chunk file(s) to $OutDir"
+
+
+Probevenue:
+
+{
+  "title": "New York Loft2",
+  "description": "Loft in New York",
+  "city": "New York",
+  "capacity": 200,
+  "payout_net_per_night": 5000
+}
+
+Venue-ID:
+
+e3c26922-d819-4ad9-b28e-dfbb292afd6f
+
+Buchungsdaten:
+
+{
+  "check_in": "2026-09-22",
+  "check_out": "2026-09-30"
+}
+
+Regeln:
+
+{ "rules_and_restrictions": "No smoking after 22:00" }
+
+
+Stripe Webhook Secret:
+
+fancy-loyal-smooth-safely
+whsec_943aeb5b45bb51d9a7a3ee8161c89ea241fa300addea48269729256ad4c114b1

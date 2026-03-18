@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: convenio
+      POSTGRES_USER: convenio
+      POSTGRES_PASSWORD: convenio
+    ports:
+      - "5432:5432"
+    volumes:
+      - convenio_db:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://convenio:convenio@db:5432/convenio
+    depends_on:
+      - db
+    ports:
+      - "9000:8000"
+    volumes:
+      - ./backend:/app
+
+volumes:
+  convenio_db:

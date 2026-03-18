@@ -1,0 +1,37 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+export default function Nav() {
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    setLoggedIn(!!token);
+  }, []);
+
+  function logout() {
+    localStorage.removeItem("access_token");
+    window.location.href = "/";
+  }
+
+  return (
+    <nav style={{ padding: 10 }}>
+      <Link href="/">Home</Link> |{" "}
+      <Link href="/venues">Venues</Link> |{" "}
+      {!loggedIn && (
+        <>
+          <Link href="/login">Login</Link> |{" "}
+          <Link href="/register">Register</Link>
+        </>
+      )}
+      {loggedIn && (
+        <>
+          <Link href="/me">My Account</Link> |{" "}
+          <button onClick={logout}>Logout</button>
+        </>
+      )}
+    </nav>
+  );
+}

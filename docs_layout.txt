@@ -1,0 +1,1984 @@
+Convenio API
+ 0.1.0 
+OAS 3.1
+/openapi.json
+
+Authorize
+default
+
+
+POST
+/register
+Register
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "email": "user@example.com",
+  "password": "stringst"
+}
+Responses
+Code	Description	Links
+201	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "email": "user@example.com"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+POST
+/login
+Login
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "email": "user@example.com",
+  "password": "string"
+}
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "access_token": "string",
+  "token_type": "bearer"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/me
+Me
+
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "email": "user@example.com"
+}
+No links
+
+GET
+/health
+Health
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+"string"
+No links
+venues
+
+
+GET
+/venues
+List Venues
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "host_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "title": "string",
+    "description": "string",
+    "city": "string",
+    "capacity": 0,
+    "payout_net_per_night": 0,
+    "status": "string"
+  }
+]
+No links
+
+POST
+/venues
+Create Venue Endpoint
+
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "title": "string",
+  "description": "string",
+  "city": "string",
+  "capacity": 1,
+  "payout_net_per_night": 0,
+  "rules_and_restrictions": "string"
+}
+Responses
+Code	Description	Links
+201	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "host_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "title": "string",
+  "description": "string",
+  "city": "string",
+  "capacity": 0,
+  "payout_net_per_night": 0,
+  "status": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+PATCH
+/venues/{venue_id}/rules
+Update Rules
+
+
+Host sets Rules & Restrictions (minimal endpoint to support publish gating).
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+string($uuid)
+(path)
+venue_id
+Request body
+
+application/json
+Example Value
+Schema
+{}
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "host_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "title": "string",
+  "description": "string",
+  "city": "string",
+  "capacity": 0,
+  "payout_net_per_night": 0,
+  "status": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+POST
+/venues/{venue_id}/publish
+Publish Venue
+
+
+Publish venue only if Rules & Restrictions are present.
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+string($uuid)
+(path)
+venue_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "host_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "title": "string",
+  "description": "string",
+  "city": "string",
+  "capacity": 0,
+  "payout_net_per_night": 0,
+  "status": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+PATCH
+/venues/{venue_id}/settings
+Update Settings
+
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+any
+(path)
+venue_id
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "guest_rating_filter": "allow_all"
+}
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+"string"
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/venues/search
+Search Venues
+
+Parameters
+Try it out
+Name	Description
+city
+string | (string | null)
+(query)
+city
+min_capacity
+integer | (integer | null)
+(query)
+min_capacity
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+"string"
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+availability
+
+
+POST
+/venues/{venue_id}/availability-blocks
+Create Block Endpoint
+
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+string
+(path)
+venue_id
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "start_date": "2026-03-03",
+  "end_date": "2026-03-03"
+}
+Responses
+Code	Description	Links
+201	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "start_date": "2026-03-03",
+  "end_date": "2026-03-03"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/venues/{venue_id}/availability-blocks
+List Blocks
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+string
+(path)
+venue_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "start_date": "2026-03-03",
+    "end_date": "2026-03-03"
+  }
+]
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+DELETE
+/venues/availability-blocks/{block_id}
+Delete Block
+
+
+Parameters
+Try it out
+Name	Description
+block_id *
+string
+(path)
+block_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+"string"
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/venues/{venue_id}/availability-check
+Check Availability
+
+Returns whether a booking would succeed right now.
+
+A date range is NOT available if it overlaps:
+
+an availability block (host blackout dates), OR
+an active booking (PENDING_PAYMENT or CONFIRMED)
+Hotel-style semantics:
+
+check_out day is NOT occupied (end is exclusive)
+Parameters
+Try it out
+Name	Description
+venue_id *
+string
+(path)
+venue_id
+check_in *
+string($date)
+(query)
+check_in
+check_out *
+string($date)
+(query)
+check_out
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+"string"
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+bookings
+
+
+POST
+/venues/{venue_id}/bookings
+Create Booking
+
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+string($uuid)
+(path)
+venue_id
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "check_in": "2026-03-03",
+  "check_out": "2026-03-03"
+}
+Responses
+Code	Description	Links
+201	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "guest_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "check_in": "2026-03-03",
+  "check_out": "2026-03-03",
+  "status": "string",
+  "created_at": "2026-03-03T06:03:58.308Z",
+  "currency": "string",
+  "amount_guest_total": 0,
+  "amount_platform_fee": 0,
+  "amount_host_payout": 0
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/venues/{venue_id}/bookings
+List Bookings For Venue
+
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+string($uuid)
+(path)
+venue_id
+status
+string | (string | null)
+(query)
+Filter by exact status, e.g. CONFIRMED
+
+status
+active
+boolean | (boolean | null)
+(query)
+If true, only PENDING_PAYMENT + CONFIRMED. If false, only non-active statuses.
+
+
+--
+from
+string | (string | null)($date)
+(query)
+Start of date window (YYYY-MM-DD). Returns bookings overlapping this window.
+
+from
+to
+string | (string | null)($date)
+(query)
+End of date window (YYYY-MM-DD). Returns bookings overlapping this window.
+
+to
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "guest_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "check_in": "2026-03-03",
+    "check_out": "2026-03-03",
+    "status": "string",
+    "created_at": "2026-03-03T06:03:58.314Z",
+    "currency": "string",
+    "amount_guest_total": 0,
+    "amount_platform_fee": 0,
+    "amount_host_payout": 0
+  }
+]
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/venues/my-bookings
+List My Bookings
+
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "guest_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "check_in": "2026-03-03",
+    "check_out": "2026-03-03",
+    "status": "string",
+    "created_at": "2026-03-03T06:03:58.318Z",
+    "currency": "string",
+    "amount_guest_total": 0,
+    "amount_platform_fee": 0,
+    "amount_host_payout": 0
+  }
+]
+No links
+
+POST
+/venues/bookings/{booking_id}/cancel
+Cancel Booking
+
+
+Compatibility endpoint.
+
+Behavior:
+
+If PENDING_PAYMENT: cancel locally (no payment/refund exists yet).
+If CONFIRMED: delegate to canonical cancellation service (CANCEL_REQUESTED).
+If already CANCELLED/EXPIRED: no-op (return booking).
+Parameters
+Try it out
+Name	Description
+booking_id *
+string($uuid)
+(path)
+booking_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "guest_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "check_in": "2026-03-03",
+  "check_out": "2026-03-03",
+  "status": "string",
+  "created_at": "2026-03-03T06:03:58.321Z",
+  "currency": "string",
+  "amount_guest_total": 0,
+  "amount_platform_fee": 0,
+  "amount_host_payout": 0
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+POST
+/venues/bookings/{booking_id}/confirm
+Confirm Booking
+
+
+Compatibility endpoint.
+
+Stripe webhook is the source of truth for CONFIRMED.
+
+Parameters
+Try it out
+Name	Description
+booking_id *
+string($uuid)
+(path)
+booking_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "guest_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "check_in": "2026-03-03",
+  "check_out": "2026-03-03",
+  "status": "string",
+  "created_at": "2026-03-03T06:03:58.324Z",
+  "currency": "string",
+  "amount_guest_total": 0,
+  "amount_platform_fee": 0,
+  "amount_host_payout": 0
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/venues/{venue_id}/calendar
+Get Venue Calendar
+
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+string($uuid)
+(path)
+venue_id
+from *
+string($date)
+(query)
+from
+to *
+string($date)
+(query)
+to
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "type": "booking",
+    "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "block_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "start": "2026-03-03",
+    "end": "2026-03-03",
+    "booking_status": "string"
+  }
+]
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+payments
+
+
+POST
+/payments/stripe/connect/onboard
+Stripe Connect Onboard
+
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "onboarding_url": "string",
+  "stripe_account_id": "string"
+}
+No links
+
+GET
+/payments/stripe/connect/status
+Stripe Connect Status
+
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "stripe_account_id": "string",
+  "onboarding_status": "string",
+  "charges_enabled": true,
+  "payouts_enabled": true
+}
+No links
+
+POST
+/payments/stripe/checkout-session
+Create Checkout Session
+
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "accept_rules_and_gtc": false
+}
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "checkout_url": "string",
+  "checkout_session_id": "string",
+  "currency": "string",
+  "amount_guest_total": 0,
+  "amount_platform_fee": 0,
+  "amount_host_payout": 0
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+POST
+/payments/stripe/webhook
+Stripe Webhook
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+"string"
+No links
+
+POST
+/payments/bookings/{booking_id}/cancel
+Cancel Booking Request
+
+
+Parameters
+Try it out
+Name	Description
+booking_id *
+string($uuid)
+(path)
+booking_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "refund_ratio": 0,
+  "new_status": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+POST
+/payments/bookings/{booking_id}/cancel/confirm
+Cancel Booking Confirm
+
+
+Parameters
+Try it out
+Name	Description
+booking_id *
+string($uuid)
+(path)
+booking_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "refund_ratio": 0,
+  "refund_amount": 0,
+  "currency": "string",
+  "new_status": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/payments/stripe/session/{session_id}
+Get Booking From Session
+
+Parameters
+Try it out
+Name	Description
+session_id *
+string
+(path)
+session_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+"string"
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+POST
+/payments/admin/payouts/run
+Admin Run Payouts
+
+
+Idempotent runner to be invoked daily by an external scheduler.
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "completed": 0,
+  "payouts_processed": 0
+}
+No links
+messaging
+
+
+GET
+/threads
+List Threads Endpoint
+
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "host_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "renter_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "created_at": "2026-03-03T06:03:58.352Z"
+  }
+]
+No links
+
+POST
+/threads
+Create Thread Endpoint
+
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+Responses
+Code	Description	Links
+201	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "venue_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "host_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "renter_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "created_at": "2026-03-03T06:03:58.354Z"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/threads/{thread_id}/messages
+List Messages Endpoint
+
+
+Parameters
+Try it out
+Name	Description
+thread_id *
+string($uuid)
+(path)
+thread_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "thread_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "sender_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "body": "string",
+    "created_at": "2026-03-03T06:03:58.357Z"
+  }
+]
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+POST
+/threads/{thread_id}/messages
+Send Message Endpoint
+
+
+Parameters
+Try it out
+Name	Description
+thread_id *
+string($uuid)
+(path)
+thread_id
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "body": "string"
+}
+Responses
+Code	Description	Links
+201	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "thread_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "sender_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "body": "string",
+  "created_at": "2026-03-03T06:03:58.361Z"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+reviews
+
+
+POST
+/reviews
+Create Review Endpoint
+
+
+Parameters
+Try it out
+No parameters
+
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "rating": 1,
+  "text": "string"
+}
+Responses
+Code	Description	Links
+201	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "reviewer_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "reviewed_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "role": "string",
+  "is_public": true,
+  "rating": 0,
+  "text": "string",
+  "visible_at": "2026-03-03T06:03:58.365Z",
+  "created_at": "2026-03-03T06:03:58.365Z"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/venues/{venue_id}/reviews
+List Venue Reviews Endpoint
+
+Parameters
+Try it out
+Name	Description
+venue_id *
+string($uuid)
+(path)
+venue_id
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "reviewer_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "reviewed_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "role": "string",
+    "is_public": true,
+    "rating": 0,
+    "text": "string",
+    "visible_at": "2026-03-03T06:03:58.369Z",
+    "created_at": "2026-03-03T06:03:58.369Z"
+  }
+]
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+disputes
+
+
+POST
+/bookings/{booking_id}/disputes
+Open Dispute
+
+
+Parameters
+Try it out
+Name	Description
+booking_id *
+string($uuid)
+(path)
+booking_id
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "dispute_type": "MISREPRESENTATION",
+  "description": "string",
+  "evidence_urls": [
+    "string"
+  ]
+}
+Responses
+Code	Description	Links
+201	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "complainant_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "respondent_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "dispute_type": "string",
+  "description": "string",
+  "evidence_urls": [
+    "string"
+  ],
+  "status": "string",
+  "enforcement_tier": 0,
+  "created_at": "2026-03-03T06:03:58.377Z",
+  "updated_at": "2026-03-03T06:03:58.377Z",
+  "resolved_at": "2026-03-03T06:03:58.377Z",
+  "resolution_outcome": "string",
+  "resolution_notes": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+GET
+/disputes/me
+My Disputes
+
+
+Parameters
+Try it out
+No parameters
+
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+[
+  {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "complainant_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "respondent_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "dispute_type": "string",
+    "description": "string",
+    "evidence_urls": [
+      "string"
+    ],
+    "status": "string",
+    "enforcement_tier": 0,
+    "created_at": "2026-03-03T06:03:58.380Z",
+    "updated_at": "2026-03-03T06:03:58.380Z",
+    "resolved_at": "2026-03-03T06:03:58.380Z",
+    "resolution_outcome": "string",
+    "resolution_notes": "string"
+  }
+]
+No links
+
+POST
+/disputes/{dispute_id}/resolve
+Admin Resolve
+
+
+Parameters
+Try it out
+Name	Description
+dispute_id *
+string($uuid)
+(path)
+dispute_id
+Request body
+
+application/json
+Example Value
+Schema
+{
+  "outcome": "APPROVED",
+  "tier": 1,
+  "notes": "string"
+}
+Responses
+Code	Description	Links
+200	
+Successful Response
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "booking_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "complainant_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "respondent_user_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "dispute_type": "string",
+  "description": "string",
+  "evidence_urls": [
+    "string"
+  ],
+  "status": "string",
+  "enforcement_tier": 0,
+  "created_at": "2026-03-03T06:03:58.385Z",
+  "updated_at": "2026-03-03T06:03:58.385Z",
+  "resolved_at": "2026-03-03T06:03:58.385Z",
+  "resolution_outcome": "string",
+  "resolution_notes": "string"
+}
+No links
+422	
+Validation Error
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": [
+    {
+      "loc": [
+        "string",
+        0
+      ],
+      "msg": "string",
+      "type": "string"
+    }
+  ]
+}
+No links
+
+Schemas
+AdminRunPayoutsResponseExpand allobject
+AvailabilityBlockCreateExpand allobject
+AvailabilityBlockOutExpand allobject
+BookingCreateExpand allobject
+BookingOutExpand allobject
+CalendarEventOutExpand allobject
+CancelBookingResponseExpand allobject
+CheckoutSessionRequestExpand allobject
+CheckoutSessionResponseExpand allobject
+ConfirmCancelResponseExpand allobject
+ConnectStatusResponseExpand allobject
+DisputeCreateInExpand allobject
+DisputeOutExpand allobject
+DisputeResolveInExpand allobject
+HTTPValidationErrorExpand allobject
+LoginRequestExpand allobject
+MessageCreateInExpand allobject
+MessageOutExpand allobject
+OnboardResponseExpand allobject
+RegisterRequestExpand allobject
+ReviewCreateInExpand allobject
+ReviewOutExpand allobject
+ThreadCreateInExpand allobject
+ThreadOutExpand allobject
+TokenResponseExpand allobject
+UserResponseExpand allobject
+ValidationErrorExpand allobject
+VenueCreateExpand allobject
+VenueOutExpand allobject
+VenueSettingsUpdateExpand allobject
