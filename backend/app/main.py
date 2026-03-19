@@ -1,6 +1,8 @@
 from pathlib import Path
-
 from dotenv import load_dotenv
+
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 load_dotenv()
 
@@ -16,6 +18,7 @@ from app.routers.payments_router import router as payments_router
 from app.routers.messaging_router import router as messaging_router
 from app.routers.reviews_router import router as reviews_router
 from app.routers.disputes_router import router as disputes_router
+from app.services.email_service import router as email_router
 
 
 def create_app() -> FastAPI:
@@ -45,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(messaging_router)
     app.include_router(reviews_router)
     app.include_router(disputes_router)
+    app.include_router(email_router)
 
     @app.get("/health")
     def health():

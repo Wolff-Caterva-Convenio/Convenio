@@ -18,6 +18,7 @@ from app.services.booking_service import (
     expire_old_pending_payment_bookings,
     complete_past_confirmed_bookings,
 )
+from app.services.email_service import send_booking_confirmation_email, send_host_notification_email
 
 # NEW: canonical cancellation service
 from app.services import cancellation_service
@@ -75,6 +76,34 @@ def create_booking(
         raise HTTPException(status_code=409, detail="Dates already booked")
 
     db.refresh(booking)
+
+    from app.services.email_service import send_booking_confirmation_email, send_host_notification_email
+
+    send_booking_confirmation_email(
+        guest_email=current_user.email,
+        venue_title=venue.title,
+        check_in=str(booking.check_in),
+        check_out=str(booking.check_out),
+        total_price=booking.total_price if hasattr(booking, "total_price") else 0
+    )
+
+    # resolve host email safely
+    host_email = None
+    if hasattr(venue, "owner") and venue.owner:
+        host_email = venue.owner.email
+    elif hasattr(venue, "owner_id"):
+        host = db.query(User).filter(User.id == venue.owner_id).first()
+        if host:
+            host_email = host.email
+
+    if host_email:
+        send_host_notification_email(
+            host_email=host_email,
+            guest_email=current_user.email,
+            venue_title=venue.title,
+            check_in=str(booking.check_in),
+            check_out=str(booking.check_out)
+        )
 
     return booking
 

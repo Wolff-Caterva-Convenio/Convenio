@@ -596,7 +596,6 @@ export default function VenuePage() {
                             const s = toDate(r.start);
                             const e2 = toDate(r.end);
 
-                            // if inside unavailable → jump to end
                             if (d >= s && d < e2) {
                               value = r.end;
                               adjusted = true;
@@ -606,7 +605,6 @@ export default function VenuePage() {
 
                           if (adjusted) continue;
 
-                          // now check if minimum stay would cross unavailable
                           if (venue?.minimum_nights) {
                             const start = toDate(value);
                             const minEnd = toDate(value);
@@ -663,7 +661,6 @@ export default function VenuePage() {
                         const start = toDate(checkIn);
                         const selected = toDate(value);
 
-                        // enforce minimum nights (snap forward)
                         if (venue?.minimum_nights) {
                           const minDate = toDate(checkIn);
                           minDate.setDate(minDate.getDate() + venue.minimum_nights);
@@ -674,7 +671,6 @@ export default function VenuePage() {
                           }
                         }
 
-                        // prevent crossing unavailable → snap to boundary
                         for (const r of unavailableRanges) {
                           const s = toDate(r.start);
                           const e2 = toDate(r.end);
@@ -782,15 +778,16 @@ export default function VenuePage() {
 
                   <button
                     onClick={messageHost}
-                    disabled={busy}
+                    disabled={busy || isHost}   {/* ← THIS WAS THE ONLY CHANGE */}
                     style={{
                       padding: "10px 14px",
                       borderRadius: 8,
                       border: "1px solid #ddd",
-                      background: "white",
+                      background: isHost ? "#f5f5f5" : "white",
+                      cursor: isHost ? "not-allowed" : "pointer",
                     }}
                   >
-                    {busy ? "Working..." : "Message host"}
+                    {busy ? "Working..." : isHost ? "You are the host" : "Message host"}
                   </button>
                 </div>
 

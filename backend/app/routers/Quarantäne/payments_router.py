@@ -260,51 +260,6 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                     db.add(payment)
 
                 db.commit()
-                db.refresh(booking)
-
-                # -----------------------------
-                # SEND EMAILS
-                # -----------------------------
-                venue = db.query(Venue).filter(Venue.id == booking.venue_id).one_or_none()
-
-                if venue:
-                    # -------- guest email (SAFE) --------
-                    guest_email = None
-
-                    if hasattr(booking, "guest") and booking.guest:
-                        guest_email = booking.guest.email
-                    else:
-                        guest = db.query(User).filter(User.id == booking.guest_user_id).first()
-                        if guest:
-                            guest_email = guest.email
-
-                    if guest_email:
-                        send_booking_confirmation_email(
-                            guest_email=guest_email,
-                            venue_title=venue.title,
-                            check_in=str(booking.check_in),
-                            check_out=str(booking.check_out),
-                            total_price=f"{booking.amount_guest_total / 100:.2f}".replace(".", ",") if hasattr(booking, "amount_guest_total") else "0,00"
-                        )
-
-                    # -------- host email (SAFE) --------
-                    host_email = None
-
-                    if hasattr(venue, "owner") and venue.owner:
-                        host_email = venue.owner.email
-                    elif hasattr(venue, "host_user_id"):
-                        host = db.query(User).filter(User.id == venue.host_user_id).first()
-                        if host:
-                            host_email = host.email
-
-                    if host_email and guest_email:
-                        send_host_notification_email(
-                            host_email=host_email,
-                            guest_email=guest_email,
-                            venue_title=venue.title,
-                            check_in=str(booking.check_in),
-                            check_out=str(booking.check_out)
-                        )
 
     return {"status": "ok"}
 
