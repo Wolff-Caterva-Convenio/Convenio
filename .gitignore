@@ -1,3 +1,12 @@
+*.zip
+frontend - Kopie/
+Quarantäne*
+~$*
+*.exe
+*.msi
+*.lnk
+stripe_backup_code.txt
+
 # Python
 .venv/
 __pycache__/
