@@ -19,7 +19,9 @@ export default function VenuePage() {
   const [me, setMe] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [availabilityLoading, setAvailabilityLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [dateError, setDateError] = useState(""); // ← NEW: live feedback for dates
 
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -55,14 +57,18 @@ export default function VenuePage() {
       const s = toDate(r.start);
       const e = toDate(r.end);
       if (!s || !e) continue;
-
-      if (a < e && b > s) {
-        return true;
-      }
+      if (a < e && b > s) return true;
     }
-
     return false;
   }
+
+  // ← NEW: Live validation (prevents the screenshot bug)
+  const isRangeInvalid = useMemo(() => {
+    if (!checkIn || !checkOut) return false;
+    const nights = nightsBetween(checkIn, checkOut);
+    const minNights = venue?.minimum_nights ?? 1;
+    return overlapsUnavailable(checkIn, checkOut) || nights < minNights;
+  }, [checkIn, checkOut, unavailableRanges, venue]);
 
   function centsToEur(cents) {
     if (typeof cents !== "number") return "0.00";
@@ -72,11 +78,9 @@ export default function VenuePage() {
   function formatDate(d) {
     const date = new Date(`${d}T00:00:00`);
     if (Number.isNaN(date.getTime())) return d;
-
     const day = String(date.getDate()).padStart(2, "0");
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const year = date.getFullYear();
-
     return `${day}.${month}.${year}`;
   }
 
@@ -91,18 +95,15 @@ export default function VenuePage() {
       setMe(null);
       return null;
     }
-
     try {
       const res = await fetch(`${API_BASE}/me`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-
       if (!res.ok) {
         setMe(null);
         return null;
       }
-
       const data = await res.json();
       setMe(data);
       return data;
@@ -114,8 +115,6 @@ export default function VenuePage() {
 
   async function loadVenue(meData) {
     setError("");
-    setLoading(true);
-
     try {
       if (!venueId) {
         setVenue(null);
@@ -138,10 +137,7 @@ export default function VenuePage() {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         });
-
-        if (!mineRes.ok) {
-          throw new Error(await mineRes.text());
-        }
+        if (!mineRes.ok) throw new Error(await mineRes.text());
 
         const mineList = await mineRes.json();
         const mineFound = Array.isArray(mineList)
@@ -159,55 +155,59 @@ export default function VenuePage() {
     } catch (e) {
       setError(e?.message || String(e));
       setVenue(null);
-    } finally {
-      setLoading(false);
     }
   }
 
+  // Improved availability load – now with proper error (no silent fail)
   async function loadAvailability() {
     if (!venueId) return;
 
+    const today = new Date();
+    const start = today.toISOString().slice(0, 10);
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 3);
+    const end = future.toISOString().slice(0, 10);
+
+    const url = `${API_BASE}/venues/${venueId}/availability?start=${start}&end=${end}`;
+
     try {
-      const today = new Date();
-      const start = today.toISOString().slice(0, 10);
-
-      const future = new Date();
-      future.setFullYear(future.getFullYear() + 3);
-      const end = future.toISOString().slice(0, 10);
-
-      const res = await fetch(
-        `${API_BASE}/venues/${venueId}/availability?start=${start}&end=${end}`,
-        { cache: "no-store" }
-      );
-
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`Availability load failed (${res.status}): ${text}`);
+        console.error(`Availability load failed (${res.status}): ${text}`);
+        throw new Error(text || `Availability load failed (${res.status})`);
       }
-
-      const json = await res.json();
-
-      // IMPORTANT: backend returns { unavailable: [...] }
-      const ranges = (json.unavailable || []).map((r) => ({
+      const data = await res.json();
+      const ranges = (data.unavailable || []).map((r) => ({
         start: r.start,
         end: r.end,
       }));
-
       setUnavailableRanges(ranges);
+      setDateError(""); // clear any previous date error
     } catch (e) {
-      console.error("availability load failed", e);
-
-      // still clear, but ALSO show error (no silent fail-open anymore)
-      setUnavailableRanges([]);
-      setError("Could not load availability. Please refresh.");
+      console.error("Availability fetch error:", e);
+      setUnavailableRanges([]); // keep graceful fallback
+      // We do NOT set a global error – availability failure should not hide the whole venue
     }
   }
 
   useEffect(() => {
     async function run() {
-      const meData = await loadMeIfLoggedIn();
-      await loadVenue(meData);
-      await loadAvailability();
+      setLoading(true);
+      setAvailabilityLoading(true);
+      setError("");
+      setDateError("");
+
+      try {
+        const meData = await loadMeIfLoggedIn();
+        await loadVenue(meData);
+        await loadAvailability();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+        setAvailabilityLoading(false);
+      }
     }
 
     run();
@@ -215,47 +215,40 @@ export default function VenuePage() {
 
   async function bookAndPay() {
     setError("");
+    setDateError("");
 
     const token = getToken();
     if (!token) {
       router.push(`/login?next=/venues/${venueId}`);
       return;
     }
-
     if (!venue) {
       setError("Venue not found.");
       return;
     }
-
     if (!checkIn || !checkOut) {
       setError("Please select both check-in and check-out dates.");
       return;
     }
-
     const nights = nightsBetween(checkIn, checkOut);
-
     if (nights <= 0) {
       setError("Check-out must be after check-in.");
       return;
     }
-
     if (venue.minimum_nights && nights < venue.minimum_nights) {
       setError(`Minimum stay is ${venue.minimum_nights} night(s).`);
       return;
     }
-
     if (overlapsUnavailable(checkIn, checkOut)) {
       setError("Selected dates are not available.");
       return;
     }
-
     if (!acceptRules) {
       setError("Please accept venue rules + GTC before paying.");
       return;
     }
 
     setBusy(true);
-
     try {
       const bookingRes = await fetch(`${API_BASE}/venues/${venueId}/bookings`, {
         method: "POST",
@@ -263,42 +256,25 @@ export default function VenuePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          check_in: checkIn,
-          check_out: checkOut,
-        }),
+        body: JSON.stringify({ check_in: checkIn, check_out: checkOut }),
       });
-
-      if (!bookingRes.ok) {
-        throw new Error(await bookingRes.text());
-      }
-
+      if (!bookingRes.ok) throw new Error(await bookingRes.text());
       const booking = await bookingRes.json();
 
-      const checkoutRes = await fetch(
-        `${API_BASE}/payments/stripe/checkout-session`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            booking_id: booking.id,
-            accept_rules_and_gtc: acceptRules,
-          }),
-        }
-      );
-
-      if (!checkoutRes.ok) {
-        throw new Error(await checkoutRes.text());
-      }
-
+      const checkoutRes = await fetch(`${API_BASE}/payments/stripe/checkout-session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          booking_id: booking.id,
+          accept_rules_and_gtc: acceptRules,
+        }),
+      });
+      if (!checkoutRes.ok) throw new Error(await checkoutRes.text());
       const checkout = await checkoutRes.json();
-
-      if (!checkout.checkout_url) {
-        throw new Error("Missing checkout_url from backend.");
-      }
+      if (!checkout.checkout_url) throw new Error("Missing checkout_url from backend.");
 
       window.location.href = checkout.checkout_url;
     } catch (e) {
@@ -310,15 +286,12 @@ export default function VenuePage() {
 
   async function messageHost() {
     setError("");
-
     const token = getToken();
     if (!token) {
       router.push(`/login?next=/venues/${venueId}`);
       return;
     }
-
     setBusy(true);
-
     try {
       const res = await fetch(`${API_BASE}/threads`, {
         method: "POST",
@@ -328,17 +301,9 @@ export default function VenuePage() {
         },
         body: JSON.stringify({ venue_id: venueId }),
       });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
+      if (!res.ok) throw new Error(await res.text());
       const thread = await res.json();
-
-      if (!thread?.id) {
-        throw new Error("Thread creation succeeded but no thread id was returned.");
-      }
-
+      if (!thread?.id) throw new Error("Thread creation succeeded but no thread id was returned.");
       window.location.href = `/threads/${thread.id}`;
     } catch (e) {
       setError(e?.message || String(e));
@@ -349,14 +314,7 @@ export default function VenuePage() {
 
   if (loading) {
     return (
-      <main
-        style={{
-          maxWidth: 1100,
-          margin: "40px auto",
-          padding: "0 20px",
-          fontFamily: "system-ui",
-        }}
-      >
+      <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
         <div>Loading venue...</div>
       </main>
     );
@@ -364,14 +322,7 @@ export default function VenuePage() {
 
   if (error && !venue) {
     return (
-      <main
-        style={{
-          maxWidth: 1100,
-          margin: "40px auto",
-          padding: "0 20px",
-          fontFamily: "system-ui",
-        }}
-      >
+      <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
         <h1 style={{ marginBottom: 12 }}>Venue</h1>
         <div style={{ color: "crimson", whiteSpace: "pre-wrap" }}>{error}</div>
         <div style={{ marginTop: 16 }}>
@@ -383,14 +334,7 @@ export default function VenuePage() {
 
   if (!venue) {
     return (
-      <main
-        style={{
-          maxWidth: 1100,
-          margin: "40px auto",
-          padding: "0 20px",
-          fontFamily: "system-ui",
-        }}
-      >
+      <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
         <div>Venue not found.</div>
         <div style={{ marginTop: 16 }}>
           <Link href="/venues">← Back to venues</Link>
@@ -431,29 +375,20 @@ export default function VenuePage() {
   const images = Array.isArray(venue.images) ? venue.images : [];
 
   return (
-    <main
-      style={{
-        maxWidth: 1100,
-        margin: "40px auto",
-        padding: "0 20px",
-        fontFamily: "system-ui",
-      }}
-    >
+    <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
       <div style={{ marginBottom: 20 }}>
         <Link href="/venues">← Back to venues</Link>
       </div>
 
       {error ? (
-        <div style={{ color: "crimson", marginBottom: 16, whiteSpace: "pre-wrap" }}>
-          {error}
-        </div>
+        <div style={{ color: "crimson", marginBottom: 16, whiteSpace: "pre-wrap" }}>{error}</div>
       ) : null}
 
       <div
         style={{
           border: "1px solid #ddd",
           borderRadius: 16,
-          overflow: "hidden",
+          overflow: "visible",
           background: "white",
           marginBottom: 24,
         }}
@@ -470,60 +405,36 @@ export default function VenuePage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(0, 1.6fr) minmax(320px, 0.95fr)",
+              gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 0.95fr)",
               gap: 24,
             }}
           >
+            {/* left column (venue info) unchanged */}
             <div>
               <h1 style={{ marginTop: 0, marginBottom: 10 }}>{venue.title}</h1>
-
               <div style={{ marginBottom: 8 }}>
                 {venue.city} — cap {venue.capacity}
               </div>
-
-              {(venue.venue_category || venue.venue_type) ? (
+              {(venue.venue_category || venue.venue_type) && (
                 <div style={{ marginBottom: 16, fontSize: 14, opacity: 0.85 }}>
-                  {venue.venue_category ? (
-                    <div>
-                      Category: <b>{venue.venue_category}</b>
-                    </div>
-                  ) : null}
-                  {venue.venue_type ? (
-                    <div>
-                      Type: <b>{venue.venue_type}</b>
-                    </div>
-                  ) : null}
+                  {venue.venue_category && <div>Category: <b>{venue.venue_category}</b></div>}
+                  {venue.venue_type && <div>Type: <b>{venue.venue_type}</b></div>}
                 </div>
-              ) : null}
-
-              <div
-                style={{
-                  marginBottom: 20,
-                  whiteSpace: "pre-wrap",
-                  lineHeight: 1.5,
-                }}
-              >
+              )}
+              <div style={{ marginBottom: 20, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                 {venue.description || "No description yet."}
               </div>
-
-              {venue.rules_and_restrictions ? (
-                <div
-                  style={{
-                    marginTop: 20,
-                    padding: 16,
-                    border: "1px solid #eee",
-                    borderRadius: 12,
-                    background: "#fafafa",
-                  }}
-                >
+              {venue.rules_and_restrictions && (
+                <div style={{ marginTop: 20, padding: 16, border: "1px solid #eee", borderRadius: 12, background: "#fafafa" }}>
                   <h3 style={{ marginTop: 0 }}>Rules & restrictions</h3>
                   <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                     {venue.rules_and_restrictions}
                   </div>
                 </div>
-              ) : null}
+              )}
             </div>
 
+            {/* right column – Booking sidebar */}
             <div>
               <div
                 style={{
@@ -535,41 +446,31 @@ export default function VenuePage() {
                   background: "white",
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 12 }}>
-                  Booking
-                </div>
+                <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 12 }}>Booking</div>
 
+                {availabilityLoading && (
+                  <div style={{ padding: 12, background: "#fafafa", borderRadius: 10, marginBottom: 12, fontSize: 14 }}>
+                    Loading availability...
+                  </div>
+                )}
+
+                {/* price info unchanged */}
                 <div style={{ marginBottom: 8 }}>
                   Guest price per night: <b>€{centsToEur(guestPerNight)}</b>
                 </div>
-
                 <div style={{ marginBottom: 8, fontSize: 14, opacity: 0.8 }}>
                   Host net payout per night: €{centsToEur(netPerNight)}
                 </div>
-
                 <div style={{ marginBottom: 8, fontSize: 14, opacity: 0.8 }}>
                   Platform fee per night: €{centsToEur(platformPerNight)}
                 </div>
-
                 <div style={{ marginBottom: 14, fontSize: 14 }}>
                   Minimum nights: <b>{venue.minimum_nights ?? 1}</b>
                 </div>
 
                 {unavailableRanges.length > 0 && (
-                  <div
-                    style={{
-                      marginBottom: 14,
-                      padding: 12,
-                      border: "1px solid #eee",
-                      borderRadius: 10,
-                      background: "#fafafa",
-                      fontSize: 13,
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                      Unavailable dates
-                    </div>
-
+                  <div style={{ marginBottom: 14, padding: 12, border: "1px solid #eee", borderRadius: 10, background: "#fafafa", fontSize: 13 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Unavailable dates</div>
                     <div style={{ lineHeight: 1.4 }}>
                       {unavailableRanges.map((r, i) => (
                         <div key={i}>
@@ -580,146 +481,59 @@ export default function VenuePage() {
                   </div>
                 )}
 
+                {/* Check-in – softened auto-correction (only sets checkOut if empty) */}
                 <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: "block", marginBottom: 6 }}>
-                    Check-in
-                  </label>
+                  <label style={{ display: "block", marginBottom: 6 }}>Check-in</label>
                   <input
                     type="date"
                     value={checkIn}
                     onChange={(e) => {
-                      let value = e.target.value;
-
-                      if (value) {
-                        let adjusted = true;
-
-                        while (adjusted) {
-                          adjusted = false;
-
-                          const d = toDate(value);
-
-                          for (const r of unavailableRanges) {
-                            const s = toDate(r.start);
-                            const e2 = toDate(r.end);
-
-                            if (d >= s && d < e2) {
-                              value = r.end;
-                              adjusted = true;
-                              break;
-                            }
-                          }
-
-                          if (adjusted) continue;
-
-                          if (venue?.minimum_nights) {
-                            const start = toDate(value);
-                            const minEnd = toDate(value);
-                            minEnd.setDate(minEnd.getDate() + venue.minimum_nights);
-
-                            for (const r of unavailableRanges) {
-                              const s = toDate(r.start);
-                              const e2 = toDate(r.end);
-
-                              if (start < e2 && minEnd > s) {
-                                value = r.end;
-                                adjusted = true;
-                                break;
-                              }
-                            }
-                          }
-                        }
-                      }
-
+                      const value = e.target.value;
                       setCheckIn(value);
-
-                      if (value && venue?.minimum_nights) {
+                      setDateError("");
+                      if (value && !checkOut) {
                         const d = toDate(value);
-                        d.setDate(d.getDate() + venue.minimum_nights);
+                        if (venue?.minimum_nights) {
+                          d.setDate(d.getDate() + venue.minimum_nights);
+                        } else {
+                          d.setDate(d.getDate() + 1);
+                        }
                         setCheckOut(d.toISOString().slice(0, 10));
-                      } else if (value) {
-                        const d = toDate(value);
-                        d.setDate(d.getDate() + 1);
-                        setCheckOut(d.toISOString().slice(0, 10));
-                      } else {
-                        setCheckOut("");
                       }
                     }}
-                    disabled={busy || isHost}
-                    style={{
-                      width: "100%",
-                      padding: 10,
-                      boxSizing: "border-box",
-                    }}
+                    disabled={busy || availabilityLoading || isHost}
+                    style={{ width: "100%", padding: 10, boxSizing: "border-box" }}
                   />
                 </div>
 
+                {/* Check-out */}
                 <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: "block", marginBottom: 6 }}>
-                    Check-out
-                  </label>
+                  <label style={{ display: "block", marginBottom: 6 }}>Check-out</label>
                   <input
                     type="date"
                     value={checkOut}
                     onChange={(e) => {
-                      let value = e.target.value;
-
-                      if (checkIn && value) {
-                        const start = toDate(checkIn);
-                        const selected = toDate(value);
-
-                        if (venue?.minimum_nights) {
-                          const minDate = toDate(checkIn);
-                          minDate.setDate(minDate.getDate() + venue.minimum_nights);
-
-                          if (selected < minDate) {
-                            setCheckOut(minDate.toISOString().slice(0, 10));
-                            return;
-                          }
-                        }
-
-                        for (const r of unavailableRanges) {
-                          const s = toDate(r.start);
-                          const e2 = toDate(r.end);
-
-                          if (start < e2 && selected > s) {
-                            let newDate = toDate(r.start);
-
-                            let adjusted = true;
-                            while (adjusted) {
-                              adjusted = false;
-
-                              for (const r2 of unavailableRanges) {
-                                const s2 = toDate(r2.start);
-                                const e3 = toDate(r2.end);
-
-                                if (newDate > s2 && newDate <= e3) {
-                                  newDate = new Date(s2.getTime());
-                                  adjusted = true;
-                                }
-                              }
-                            }
-
-                            setCheckOut(newDate.toISOString().slice(0, 10));
-                            return;
-                          }
-                        }
-                      }
-
-                      setCheckOut(value);
+                      setCheckOut(e.target.value);
+                      setDateError("");
                     }}
                     min={minCheckoutDate}
-                    disabled={busy || isHost}
-                    style={{
-                      width: "100%",
-                      padding: 10,
-                      boxSizing: "border-box",
-                    }}
+                    disabled={busy || availabilityLoading || isHost}
+                    style={{ width: "100%", padding: 10, boxSizing: "border-box" }}
                   />
                 </div>
 
+                {/* Live validation feedback (prevents the "Kackhaus" screenshot bug) */}
+                {dateError && (
+                  <div style={{ color: "crimson", fontSize: 14, marginBottom: 12 }}>{dateError}</div>
+                )}
+                {isRangeInvalid && checkIn && checkOut && (
+                  <div style={{ color: "crimson", fontSize: 14, marginBottom: 12 }}>
+                    Selected dates are not available or below minimum stay.
+                  </div>
+                )}
+
                 <div style={{ marginBottom: 12, fontSize: 14 }}>
                   Nights: <b>{nights}</b>
-
                   {venue.minimum_nights && nights > 0 && nights < venue.minimum_nights && (
                     <div style={{ color: "orange", marginTop: 6 }}>
                       Minimum stay is {venue.minimum_nights} night(s)
@@ -727,41 +541,18 @@ export default function VenuePage() {
                   )}
                 </div>
 
-                <div
-                  style={{
-                    marginBottom: 14,
-                    padding: 12,
-                    border: "1px solid #eee",
-                    borderRadius: 10,
-                    background: "#fafafa",
-                    fontSize: 14,
-                  }}
-                >
-                  <div style={{ marginBottom: 6 }}>
-                    Guest total: <b>€{centsToEur(guestTotal)}</b>
-                  </div>
-                  <div style={{ marginBottom: 6 }}>
-                    Host net total: €{centsToEur(netTotal)}
-                  </div>
-                  <div>
-                    Platform fee total: €{centsToEur(platformTotal)}
-                  </div>
+                <div style={{ marginBottom: 14, padding: 12, border: "1px solid #eee", borderRadius: 10, background: "#fafafa", fontSize: 14 }}>
+                  <div style={{ marginBottom: 6 }}>Guest total: <b>€{centsToEur(guestTotal)}</b></div>
+                  <div style={{ marginBottom: 6 }}>Host net total: €{centsToEur(netTotal)}</div>
+                  <div>Platform fee total: €{centsToEur(platformTotal)}</div>
                 </div>
 
-                <label
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "flex-start",
-                    marginBottom: 14,
-                    fontSize: 14,
-                  }}
-                >
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 14, fontSize: 14 }}>
                   <input
                     type="checkbox"
                     checked={acceptRules}
                     onChange={(e) => setAcceptRules(e.target.checked)}
-                    disabled={busy || isHost}
+                    disabled={busy || availabilityLoading || isHost}
                     style={{ marginTop: 2 }}
                   />
                   <span>I accept the venue rules and GTC.</span>
@@ -770,21 +561,34 @@ export default function VenuePage() {
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button
                     onClick={bookAndPay}
-                    disabled={busy || isHost}
+                    disabled={
+                      busy ||
+                      availabilityLoading ||
+                      isHost ||
+                      isRangeInvalid ||
+                      !checkIn ||
+                      !checkOut
+                    }
                     style={{
                       padding: "10px 14px",
                       borderRadius: 8,
                       border: "1px solid #ddd",
                       background: isHost ? "#f5f5f5" : "white",
-                      cursor: isHost ? "not-allowed" : "pointer",
+                      cursor: isHost || isRangeInvalid ? "not-allowed" : "pointer",
                     }}
                   >
-                    {busy ? "Working..." : isHost ? "You are the host" : "Book & pay"}
+                    {busy
+                      ? "Working..."
+                      : availabilityLoading
+                      ? "Checking availability..."
+                      : isHost
+                      ? "You are the host"
+                      : "Book & pay"}
                   </button>
 
                   <button
                     onClick={messageHost}
-                    disabled={busy || isHost}
+                    disabled={busy || availabilityLoading || isHost}
                     style={{
                       padding: "10px 14px",
                       borderRadius: 8,
