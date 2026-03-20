@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import VenueGallery from "../components/VenueGallery";
+import BookingCard from "../components/BookingCard";
 
 const CATEGORIES = [
   "Art & Culture",

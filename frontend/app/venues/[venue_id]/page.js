@@ -1,15 +1,13 @@
 "use client";
 
-import { DayPicker } from "react-day-picker";
-import "react-day-picker/dist/style.css";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
+import BookingCard from "../../components/BookingCard";
 import VenueGallery from "../../components/VenueGallery";
 
 export default function VenuePage() {
   const params = useParams();
-  const router = useRouter();
   const venueId = params?.venue_id;
 
   const API_BASE = useMemo(
@@ -21,354 +19,76 @@ export default function VenuePage() {
   const [me, setMe] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [availabilityLoading, setAvailabilityLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [dateError, setDateError] = useState("");
 
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [acceptRules, setAcceptRules] = useState(false);
-  const [unavailableRanges, setUnavailableRanges] = useState([]);
-  const [range, setRange] = useState();
-
-  function getToken() {
-    return localStorage.getItem("access_token");
-  }
-
-  function toDate(s) {
-    if (!s) return null;
-    const d = new Date(`${s}T00:00:00`);
-    if (Number.isNaN(d.getTime())) return null;
-    return d;
-  }
-
-  function nightsBetween(checkInStr, checkOutStr) {
-    const a = toDate(checkInStr);
-    const b = toDate(checkOutStr);
-    if (!a || !b) return 0;
-    const ms = b.getTime() - a.getTime();
-    const days = Math.round(ms / (1000 * 60 * 60 * 24));
-    return days > 0 ? days : 0;
-  }
-
-  function overlapsUnavailable(checkInStr, checkOutStr) {
-    const a = toDate(checkInStr);
-    const b = toDate(checkOutStr);
-    if (!a || !b) return false;
-
-    for (const r of unavailableRanges) {
-      const s = toDate(r.start);
-      const e = toDate(r.end);
-      if (!s || !e) continue;
-      if (a < e && b > s) return true;
-    }
-    return false;
-  }
-
-  function isDateDisabled(date) {
-    for (const r of unavailableRanges) {
-      const start = toDate(r.start);
-      const end = toDate(r.end);
-      if (!start || !end) continue;
-
-      if (date >= start && date < end) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  const isRangeInvalid = useMemo(() => {
-    if (!checkIn || !checkOut) return false;
-    const nights = nightsBetween(checkIn, checkOut);
-    const minNights = venue?.minimum_nights ?? 1;
-    return overlapsUnavailable(checkIn, checkOut) || nights < minNights;
-  }, [checkIn, checkOut, unavailableRanges, venue]);
-
-  function centsToEur(cents) {
-    if (typeof cents !== "number") return "0.00";
-    return (cents / 100).toFixed(2);
-  }
-
-  function formatDate(d) {
-    const date = new Date(`${d}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return d;
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
-    return `${day}.${month}.${year}`;
-  }
-
-  function guestPriceFromNet(netCents) {
-    if (typeof netCents !== "number") return 0;
-    return Math.round(netCents / 0.83);
-  }
-
+  // --- DATA FETCHING ---
+  
   async function loadMeIfLoggedIn() {
-    const token = getToken();
-    if (!token) {
-      setMe(null);
-      return null;
-    }
+    const token = localStorage.getItem("access_token");
+    if (!token) return null;
     try {
       const res = await fetch(`${API_BASE}/me`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (!res.ok) {
-        setMe(null);
-        return null;
-      }
-      const data = await res.json();
-      setMe(data);
-      return data;
+      if (!res.ok) return null;
+      return await res.json();
     } catch {
-      setMe(null);
       return null;
     }
   }
 
   async function loadVenue(meData) {
-    setError("");
     try {
-      if (!venueId) {
-        setVenue(null);
-        return;
-      }
-
       const res = await fetch(`${API_BASE}/venues/${venueId}`, {
         cache: "no-store",
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setVenue(data);
-        return;
+        return await res.json();
       }
 
-      const token = getToken();
+      // Fallback for Host View (if venue is private/draft but belongs to user)
+      const token = localStorage.getItem("access_token");
       if (token && meData) {
         const mineRes = await fetch(`${API_BASE}/venues/mine`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         });
-        if (!mineRes.ok) throw new Error(await mineRes.text());
-
-        const mineList = await mineRes.json();
-        const mineFound = Array.isArray(mineList)
-          ? mineList.find((x) => String(x.id) === String(venueId))
-          : null;
-
-        if (mineFound) {
-          setVenue(mineFound);
-          return;
+        if (mineRes.ok) {
+          const mineList = await mineRes.json();
+          const mineFound = Array.isArray(mineList)
+            ? mineList.find((x) => String(x.id) === String(venueId))
+            : null;
+          if (mineFound) return mineFound;
         }
       }
 
       const text = await res.text();
       throw new Error(text || "Venue not found.");
     } catch (e) {
-      setError(e?.message || String(e));
-      setVenue(null);
-    }
-  }
-
-  async function loadAvailability() {
-    if (!venueId) return;
-
-    const today = new Date();
-    const start = today.toISOString().slice(0, 10);
-    const future = new Date();
-    future.setFullYear(future.getFullYear() + 3);
-    const end = future.toISOString().slice(0, 10);
-
-    const url = `${API_BASE}/venues/${venueId}/availability?start=${start}&end=${end}`;
-
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Availability load failed (${res.status})`);
-      }
-      const data = await res.json();
-      const ranges = (data.unavailable || []).map((r) => ({
-        start: r.start,
-        end: r.end,
-      }));
-      setUnavailableRanges(ranges);
-      setDateError("");
-    } catch (e) {
-      console.error("Availability fetch error:", e);
-      setUnavailableRanges([]);
-    } finally {
-      setAvailabilityLoading(false);
+      throw e;
     }
   }
 
   useEffect(() => {
     async function run() {
       setLoading(true);
-      setAvailabilityLoading(true);
       setError("");
-      setDateError("");
-
       try {
         const meData = await loadMeIfLoggedIn();
-        await loadVenue(meData);
-        await loadAvailability();
+        setMe(meData);
+        const venueData = await loadVenue(meData);
+        setVenue(venueData);
       } catch (e) {
-        console.error(e);
+        setError(e?.message || String(e));
       } finally {
         setLoading(false);
       }
     }
-
-    run();
+    if (venueId) run();
   }, [venueId, API_BASE]);
 
-  useEffect(() => {
-    if (!range?.from) {
-      setCheckIn("");
-      setCheckOut("");
-      return;
-    }
-
-    const from = range.from.toISOString().slice(0, 10);
-    setCheckIn(from);
-
-    if (range.to) {
-      const to = range.to.toISOString().slice(0, 10);
-      setCheckOut(to);
-    } else {
-      setCheckOut("");
-    }
-
-    setDateError("");
-  }, [range]);
-
-  // Logic for the colored min-stay block highlight
-  const minStayModifier = useMemo(() => {
-    if (!range?.from) return null;
-    const end = new Date(range.from);
-    // Include check-in date by using (min_nights - 1)
-    end.setDate(end.getDate() + (venue?.minimum_nights ?? 1) - 1);
-    return { from: range.from, to: end };
-  }, [range, venue]);
-
-  async function bookAndPay() {
-    setError("");
-    setDateError("");
-
-    const token = getToken();
-    if (!token) {
-      router.push(`/login?next=/venues/${venueId}`);
-      return;
-    }
-    if (!venue) {
-      setError("Venue not found.");
-      return;
-    }
-    if (!checkIn || !checkOut) {
-      setError("Please select both check-in and check-out dates.");
-      return;
-    }
-    const nights = nightsBetween(checkIn, checkOut);
-    if (nights <= 0) {
-      setError("Check-out must be after check-in.");
-      return;
-    }
-    if (venue.minimum_nights && nights < venue.minimum_nights) {
-      setError(`Minimum stay is ${venue.minimum_nights} night(s).`);
-      return;
-    }
-    if (overlapsUnavailable(checkIn, checkOut)) {
-      setError("Selected dates are not available.");
-      return;
-    }
-    if (!acceptRules) {
-      setError("Please accept venue rules + GTC before paying.");
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const bookingRes = await fetch(`${API_BASE}/venues/${venueId}/bookings`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ check_in: checkIn, check_out: checkOut }),
-      });
-      if (!bookingRes.ok) throw new Error(await bookingRes.text());
-      const booking = await bookingRes.json();
-
-      try {
-        const checkoutRes = await fetch(`${API_BASE}/payments/stripe/checkout-session`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            booking_id: booking.id,
-            accept_rules_and_gtc: acceptRules,
-          }),
-        });
-        if (!checkoutRes.ok) throw new Error(await checkoutRes.text());
-        const checkout = await checkoutRes.json();
-        if (!checkout.checkout_url) throw new Error("Missing checkout_url from backend.");
-
-        window.location.href = checkout.checkout_url;
-
-      } catch (paymentError) {
-        try {
-          await fetch(`${API_BASE}/venues/bookings/${booking.id}/cancel`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-        } catch (cleanupError) {
-          console.error("Cleanup failed:", cleanupError);
-        }
-        throw paymentError;
-      }
-
-    } catch (e) {
-      setError(e?.message || String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function messageHost() {
-    setError("");
-    const token = getToken();
-    if (!token) {
-      router.push(`/login?next=/venues/${venueId}`);
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch(`${API_BASE}/threads`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ venue_id: venueId }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const thread = await res.json();
-      if (!thread?.id) throw new Error("Thread creation succeeded but no thread id was returned.");
-      window.location.href = `/threads/${thread.id}`;
-    } catch (e) {
-      setError(e?.message || String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+  // --- RENDER STATES ---
 
   if (loading) {
     return (
@@ -378,48 +98,21 @@ export default function VenuePage() {
     );
   }
 
-  if (error && !venue) {
+  if (error || !venue) {
     return (
       <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
         <h1 style={{ marginBottom: 12 }}>Venue</h1>
-        <div style={{ color: "crimson", whiteSpace: "pre-wrap" }}>{error}</div>
+        <div style={{ color: "crimson", whiteSpace: "pre-wrap" }}>{error || "Venue not found."}</div>
         <div style={{ marginTop: 16 }}>
           <Link href="/venues">← Back to venues</Link>
         </div>
       </main>
     );
   }
-
-  if (!venue) {
-    return (
-      <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
-        <div>Venue not found.</div>
-        <div style={{ marginTop: 16 }}>
-          <Link href="/venues">← Back to venues</Link>
-        </div>
-      </main>
-    );
-  }
-
-  const isHost = Boolean(
-    venue && me && venue.host_user_id && String(me.id) === String(venue.host_user_id)
-  );
-
-  const nights = nightsBetween(checkIn, checkOut);
-
-  const netPerNight = Number(venue?.payout_net_per_night ?? 0);
-  const guestPerNight = guestPriceFromNet(netPerNight);
-  const platformPerNight = guestPerNight - netPerNight;
-
-  const guestTotal = guestPerNight * (nights || 0);
-  const netTotal = netPerNight * (nights || 0);
-  const platformTotal = platformPerNight * (nights || 0);
-
-  const images = Array.isArray(venue.images) ? venue.images : [];
 
   return (
     <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
-      {/* GLOBAL OVERRIDE CSS FOR CALENDAR */}
+      {/* Calendar Global Styles */}
       <style>{`
         .rdp-day_selected:not(.rdp-day_outside) { 
           background-color: blue !important; 
@@ -435,10 +128,6 @@ export default function VenuePage() {
         <Link href="/venues">← Back to venues</Link>
       </div>
 
-      {error ? (
-        <div style={{ color: "crimson", marginBottom: 16, whiteSpace: "pre-wrap" }}>{error}</div>
-      ) : null}
-
       <div
         style={{
           border: "1px solid #ddd",
@@ -453,7 +142,7 @@ export default function VenuePage() {
           apiBase={API_BASE}
           coverImageUrl={venue.cover_image_url}
           legacyImageUrl={venue.image_url}
-          images={images}
+          images={venue.images || []}
         />
 
         <div style={{ padding: 20 }}>
@@ -464,20 +153,24 @@ export default function VenuePage() {
               gap: 24,
             }}
           >
+            {/* LEFT COLUMN: Venue Details */}
             <div>
               <h1 style={{ marginTop: 0, marginBottom: 10 }}>{venue.title}</h1>
               <div style={{ marginBottom: 8 }}>
                 {venue.city} — cap {venue.capacity}
               </div>
+              
               {(venue.venue_category || venue.venue_type) && (
                 <div style={{ marginBottom: 16, fontSize: 14, opacity: 0.85 }}>
                   {venue.venue_category && <div>Category: <b>{venue.venue_category}</b></div>}
                   {venue.venue_type && <div>Type: <b>{venue.venue_type}</b></div>}
                 </div>
               )}
+
               <div style={{ marginBottom: 20, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                 {venue.description || "No description yet."}
               </div>
+
               {venue.rules_and_restrictions && (
                 <div style={{ marginTop: 20, padding: 16, border: "1px solid #eee", borderRadius: 12, background: "#fafafa" }}>
                   <h3 style={{ marginTop: 0 }}>Rules & restrictions</h3>
@@ -486,221 +179,18 @@ export default function VenuePage() {
                   </div>
                 </div>
               )}
-            </div>
-
-            <div>
-              <div
-                style={{
-                  border: "1px solid #ddd",
-                  borderRadius: 14,
-                  padding: 16,
-                  position: "sticky",
-                  top: 20,
-                  background: "white",
-                }}
-              >
-                <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 12 }}>Booking</div>
-
-                {availabilityLoading && (
-                  <div style={{ padding: 12, background: "#fafafa", borderRadius: 10, marginBottom: 12, fontSize: 14 }}>
-                    Loading availability...
-                  </div>
-                )}
-
-                <div style={{ marginBottom: 8 }}>
-                  Guest price per night: <b>€{centsToEur(guestPerNight)}</b>
-                </div>
-                <div style={{ marginBottom: 8, fontSize: 14, opacity: 0.8 }}>
-                  Host net payout per night: €{centsToEur(netPerNight)}
-                </div>
-                <div style={{ marginBottom: 8, fontSize: 14, opacity: 0.8 }}>
-                  Platform fee per night: €{centsToEur(platformPerNight)}
-                </div>
-                <div style={{ marginBottom: 14, fontSize: 14 }}>
-                  Minimum nights: <b>{venue.minimum_nights ?? 1}</b>
-                </div>
-
-                {unavailableRanges.length > 0 && (
-                  <div style={{ marginBottom: 14, padding: 12, border: "1px solid #eee", borderRadius: 10, background: "#fafafa", fontSize: 13 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>Unavailable dates</div>
-                    <div style={{ lineHeight: 1.4 }}>
-                      {unavailableRanges.map((r, i) => (
-                        <div key={i}>
-                          {formatDate(r.start)} → {formatDate(r.end)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                    <label style={{ display: "block", marginBottom: 6 }}>
-                      Select stay
-                    </label>
-                    {range?.from && (
-                      <button 
-                        onClick={() => {
-                          setRange(undefined);
-                          setCheckIn("");
-                          setCheckOut("");
-                          setDateError("");
-                        }}
-                        style={{
-                          fontSize: 12,
-                          color: 'blue',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          marginBottom: 6
-                        }}
-                      >
-                        Clear dates
-                      </button>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      border: "1px solid #eee",
-                      borderRadius: 10,
-                      padding: 12,
-                      background: availabilityLoading || isHost ? "#fafafa" : "white",
-                      opacity: availabilityLoading || isHost ? 0.7 : 1,
-                      pointerEvents: availabilityLoading || busy || isHost ? "none" : "auto",
-                    }}
-                  >
-                    <DayPicker
-                      mode="range"
-                      selected={range}
-                      onSelect={(r, selectedDay) => {
-                        if (!r) {
-                          setRange(undefined);
-                          setCheckIn("");
-                          setCheckOut("");
-                          setDateError("");
-                          return;
-                        }
-
-                        if (range?.from && range?.to && selectedDay.getTime() === range.to.getTime()) {
-                          setRange({ from: range.from });
-                          setCheckOut("");
-                          setDateError("");
-                          return;
-                        }
-
-                        if (range?.from && !range?.to && selectedDay.getTime() === range.from.getTime()) {
-                          setRange(undefined);
-                          setCheckIn("");
-                          setCheckOut("");
-                          setDateError("");
-                          return;
-                        }
-
-                        setRange(r);
-
-                        if (r.from && r.to) {
-                          const fromStr = r.from.toISOString().slice(0, 10);
-                          const toStr = r.to.toISOString().slice(0, 10);
-                          if (overlapsUnavailable(fromStr, toStr)) {
-                            setDateError("This range includes unavailable dates.");
-                          } else if (nightsBetween(fromStr, toStr) < (venue?.minimum_nights ?? 1)) {
-                            setDateError(`Minimum stay is ${venue?.minimum_nights ?? 1} night(s).`);
-                          } else {
-                            setDateError("");
-                          }
-                        }
-                      }}
-                      disabled={(date) => {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        return date < today || isDateDisabled(date);
-                      }}
-                      modifiersStyles={{
-                        unavailable: {
-                          // Keep it subtle or use a strike-through look
-                          backgroundColor: "#f5f5f5", 
-                          color: "#C8993C", 
-                          textDecoration: "line-through",
-                          opacity: 0.5
-                        },
-                        minStay: {
-                          // Use the lighter shade for the "range" highlight
-                          backgroundColor: "#E6D2AA", 
-                          color: "#C8993C", // Dark gold text on light gold background
-                          fontWeight: "bold"
-                        }
-                      }}
-                      numberOfMonths={1}
-                    />
-                  </div>
-                </div>
-
-                {dateError && (
-                  <div style={{ color: "crimson", fontSize: 14, marginBottom: 12 }}>{dateError}</div>
-                )}
-
-                <div style={{ marginBottom: 12, fontSize: 14 }}>
-                  Nights: <b>{nights}</b>
-                  {venue.minimum_nights && nights > 0 && nights < venue.minimum_nights && (
-                    <div style={{ color: "orange", marginTop: 6 }}>
-                      Minimum stay is {venue.minimum_nights} night(s)
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ marginBottom: 14, padding: 12, border: "1px solid #eee", borderRadius: 10, background: "#fafafa", fontSize: 14 }}>
-                  <div style={{ marginBottom: 6 }}>Guest total: <b>€{centsToEur(guestTotal)}</b></div>
-                  <div style={{ marginBottom: 6 }}>Host net total: €{centsToEur(netTotal)}</div>
-                  <div>Platform fee total: €{centsToEur(platformTotal)}</div>
-                </div>
-
-                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 14, fontSize: 14 }}>
-                  <input
-                    type="checkbox"
-                    checked={acceptRules}
-                    onChange={(e) => setAcceptRules(e.target.checked)}
-                    disabled={busy || availabilityLoading || isHost}
-                    style={{ marginTop: 2 }}
-                  />
-                  <span>I accept the venue rules and GTC.</span>
-                </label>
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button
-                    onClick={bookAndPay}
-                    disabled={busy || availabilityLoading || isHost || isRangeInvalid || !checkIn || !checkOut}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 8,
-                      border: "1px solid #ddd",
-                      background: isHost ? "#f5f5f5" : "white",
-                      cursor: isHost || isRangeInvalid ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {busy ? "Working..." : availabilityLoading ? "Checking..." : isHost ? "You are host" : "Book & pay"}
-                  </button>
-
-                  <button
-                    onClick={messageHost}
-                    disabled={busy || availabilityLoading || isHost}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 8,
-                      border: "1px solid #ddd",
-                      background: isHost ? "#f5f5f5" : "white",
-                      cursor: isHost ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {busy ? "Working..." : isHost ? "You are host" : "Message host"}
-                  </button>
-                </div>
-
-                <div style={{ marginTop: 14, fontSize: 13, color: "#670" }}>
-                  Status: <b>{venue.status || "—"}</b>
-                </div>
+              
+              <div style={{ marginTop: 14, fontSize: 13, color: "#670" }}>
+                Status: <b>{venue.status || "—"}</b>
               </div>
             </div>
+
+            {/* RIGHT COLUMN: The Refactored Booking Card */}
+            <BookingCard 
+              venue={venue} 
+              me={me} 
+              API_BASE={API_BASE} 
+            />
           </div>
         </div>
       </div>

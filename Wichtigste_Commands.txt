@@ -71,6 +71,15 @@ Select-String -Path $_.FullName -Pattern 'class |def |APIRouter|@router|include_
 }) | Out-File backend_code.txt
 
 
+Github upload:
+
+C:\Users\Dwealibob\Desktop\convenio>
+
+C:\Users\Dwealibob\Desktop\convenio> git status
+C:\Users\Dwealibob\Desktop\convenio> git add .
+C:\Users\Dwealibob\Desktop\convenio> git commit -m "."
+C:\Users\Dwealibob\Desktop\convenio> git push
+
 Mit mehr Details:
 
 $Root   = Join-Path (Get-Location) 'backend'
