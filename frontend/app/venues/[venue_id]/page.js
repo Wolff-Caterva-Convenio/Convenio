@@ -1,5 +1,7 @@
 "use client";
 
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -21,12 +23,13 @@ export default function VenuePage() {
   const [loading, setLoading] = useState(true);
   const [availabilityLoading, setAvailabilityLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [dateError, setDateError] = useState(""); // ← NEW: live feedback for dates
+  const [dateError, setDateError] = useState("");
 
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [acceptRules, setAcceptRules] = useState(false);
   const [unavailableRanges, setUnavailableRanges] = useState([]);
+  const [range, setRange] = useState();
 
   function getToken() {
     return localStorage.getItem("access_token");
@@ -62,7 +65,19 @@ export default function VenuePage() {
     return false;
   }
 
-  // ← NEW: Live validation (prevents the screenshot bug)
+  function isDateDisabled(date) {
+    for (const r of unavailableRanges) {
+      const start = toDate(r.start);
+      const end = toDate(r.end);
+      if (!start || !end) continue;
+
+      if (date >= start && date < end) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   const isRangeInvalid = useMemo(() => {
     if (!checkIn || !checkOut) return false;
     const nights = nightsBetween(checkIn, checkOut);
@@ -158,7 +173,6 @@ export default function VenuePage() {
     }
   }
 
-  // Improved availability load – now with proper error (no silent fail)
   async function loadAvailability() {
     if (!venueId) return;
 
@@ -174,7 +188,6 @@ export default function VenuePage() {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) {
         const text = await res.text();
-        console.error(`Availability load failed (${res.status}): ${text}`);
         throw new Error(text || `Availability load failed (${res.status})`);
       }
       const data = await res.json();
@@ -183,11 +196,12 @@ export default function VenuePage() {
         end: r.end,
       }));
       setUnavailableRanges(ranges);
-      setDateError(""); // clear any previous date error
+      setDateError("");
     } catch (e) {
       console.error("Availability fetch error:", e);
-      setUnavailableRanges([]); // keep graceful fallback
-      // We do NOT set a global error – availability failure should not hide the whole venue
+      setUnavailableRanges([]);
+    } finally {
+      setAvailabilityLoading(false);
     }
   }
 
@@ -206,12 +220,40 @@ export default function VenuePage() {
         console.error(e);
       } finally {
         setLoading(false);
-        setAvailabilityLoading(false);
       }
     }
 
     run();
   }, [venueId, API_BASE]);
+
+  useEffect(() => {
+    if (!range?.from) {
+      setCheckIn("");
+      setCheckOut("");
+      return;
+    }
+
+    const from = range.from.toISOString().slice(0, 10);
+    setCheckIn(from);
+
+    if (range.to) {
+      const to = range.to.toISOString().slice(0, 10);
+      setCheckOut(to);
+    } else {
+      setCheckOut("");
+    }
+
+    setDateError("");
+  }, [range]);
+
+  // Logic for the colored min-stay block highlight
+  const minStayModifier = useMemo(() => {
+    if (!range?.from) return null;
+    const end = new Date(range.from);
+    // Include check-in date by using (min_nights - 1)
+    end.setDate(end.getDate() + (venue?.minimum_nights ?? 1) - 1);
+    return { from: range.from, to: end };
+  }, [range, venue]);
 
   async function bookAndPay() {
     setError("");
@@ -261,22 +303,38 @@ export default function VenuePage() {
       if (!bookingRes.ok) throw new Error(await bookingRes.text());
       const booking = await bookingRes.json();
 
-      const checkoutRes = await fetch(`${API_BASE}/payments/stripe/checkout-session`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          booking_id: booking.id,
-          accept_rules_and_gtc: acceptRules,
-        }),
-      });
-      if (!checkoutRes.ok) throw new Error(await checkoutRes.text());
-      const checkout = await checkoutRes.json();
-      if (!checkout.checkout_url) throw new Error("Missing checkout_url from backend.");
+      try {
+        const checkoutRes = await fetch(`${API_BASE}/payments/stripe/checkout-session`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            booking_id: booking.id,
+            accept_rules_and_gtc: acceptRules,
+          }),
+        });
+        if (!checkoutRes.ok) throw new Error(await checkoutRes.text());
+        const checkout = await checkoutRes.json();
+        if (!checkout.checkout_url) throw new Error("Missing checkout_url from backend.");
 
-      window.location.href = checkout.checkout_url;
+        window.location.href = checkout.checkout_url;
+
+      } catch (paymentError) {
+        try {
+          await fetch(`${API_BASE}/venues/bookings/${booking.id}/cancel`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+        } catch (cleanupError) {
+          console.error("Cleanup failed:", cleanupError);
+        }
+        throw paymentError;
+      }
+
     } catch (e) {
       setError(e?.message || String(e));
     } finally {
@@ -349,21 +407,6 @@ export default function VenuePage() {
 
   const nights = nightsBetween(checkIn, checkOut);
 
-  const minCheckoutDate =
-    checkIn && venue?.minimum_nights
-      ? (() => {
-          const d = toDate(checkIn);
-          d.setDate(d.getDate() + venue.minimum_nights);
-          return d.toISOString().slice(0, 10);
-        })()
-      : checkIn
-      ? (() => {
-          const d = toDate(checkIn);
-          d.setDate(d.getDate() + 1);
-          return d.toISOString().slice(0, 10);
-        })()
-      : "";
-
   const netPerNight = Number(venue?.payout_net_per_night ?? 0);
   const guestPerNight = guestPriceFromNet(netPerNight);
   const platformPerNight = guestPerNight - netPerNight;
@@ -376,6 +419,18 @@ export default function VenuePage() {
 
   return (
     <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
+      {/* GLOBAL OVERRIDE CSS FOR CALENDAR */}
+      <style>{`
+        .rdp-day_selected:not(.rdp-day_outside) { 
+          background-color: blue !important; 
+          color: white !important; 
+          opacity: 1 !important;
+        }
+        .rdp-day_range_start { border-radius: 50% 0 0 50% !important; }
+        .rdp-day_range_end { border-radius: 0 50% 50% 0 !important; }
+        .rdp-day_range_start.rdp-day_range_end { border-radius: 50% !important; }
+      `}</style>
+
       <div style={{ marginBottom: 20 }}>
         <Link href="/venues">← Back to venues</Link>
       </div>
@@ -409,7 +464,6 @@ export default function VenuePage() {
               gap: 24,
             }}
           >
-            {/* left column (venue info) unchanged */}
             <div>
               <h1 style={{ marginTop: 0, marginBottom: 10 }}>{venue.title}</h1>
               <div style={{ marginBottom: 8 }}>
@@ -434,7 +488,6 @@ export default function VenuePage() {
               )}
             </div>
 
-            {/* right column – Booking sidebar */}
             <div>
               <div
                 style={{
@@ -454,7 +507,6 @@ export default function VenuePage() {
                   </div>
                 )}
 
-                {/* price info unchanged */}
                 <div style={{ marginBottom: 8 }}>
                   Guest price per night: <b>€{centsToEur(guestPerNight)}</b>
                 </div>
@@ -481,55 +533,111 @@ export default function VenuePage() {
                   </div>
                 )}
 
-                {/* Check-in – softened auto-correction (only sets checkOut if empty) */}
                 <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: "block", marginBottom: 6 }}>Check-in</label>
-                  <input
-                    type="date"
-                    value={checkIn}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setCheckIn(value);
-                      setDateError("");
-                      if (value && !checkOut) {
-                        const d = toDate(value);
-                        if (venue?.minimum_nights) {
-                          d.setDate(d.getDate() + venue.minimum_nights);
-                        } else {
-                          d.setDate(d.getDate() + 1);
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <label style={{ display: "block", marginBottom: 6 }}>
+                      Select stay
+                    </label>
+                    {range?.from && (
+                      <button 
+                        onClick={() => {
+                          setRange(undefined);
+                          setCheckIn("");
+                          setCheckOut("");
+                          setDateError("");
+                        }}
+                        style={{
+                          fontSize: 12,
+                          color: 'blue',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          marginBottom: 6
+                        }}
+                      >
+                        Clear dates
+                      </button>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      border: "1px solid #eee",
+                      borderRadius: 10,
+                      padding: 12,
+                      background: availabilityLoading || isHost ? "#fafafa" : "white",
+                      opacity: availabilityLoading || isHost ? 0.7 : 1,
+                      pointerEvents: availabilityLoading || busy || isHost ? "none" : "auto",
+                    }}
+                  >
+                    <DayPicker
+                      mode="range"
+                      selected={range}
+                      onSelect={(r, selectedDay) => {
+                        if (!r) {
+                          setRange(undefined);
+                          setCheckIn("");
+                          setCheckOut("");
+                          setDateError("");
+                          return;
                         }
-                        setCheckOut(d.toISOString().slice(0, 10));
-                      }
-                    }}
-                    disabled={busy || availabilityLoading || isHost}
-                    style={{ width: "100%", padding: 10, boxSizing: "border-box" }}
-                  />
+
+                        if (range?.from && range?.to && selectedDay.getTime() === range.to.getTime()) {
+                          setRange({ from: range.from });
+                          setCheckOut("");
+                          setDateError("");
+                          return;
+                        }
+
+                        if (range?.from && !range?.to && selectedDay.getTime() === range.from.getTime()) {
+                          setRange(undefined);
+                          setCheckIn("");
+                          setCheckOut("");
+                          setDateError("");
+                          return;
+                        }
+
+                        setRange(r);
+
+                        if (r.from && r.to) {
+                          const fromStr = r.from.toISOString().slice(0, 10);
+                          const toStr = r.to.toISOString().slice(0, 10);
+                          if (overlapsUnavailable(fromStr, toStr)) {
+                            setDateError("This range includes unavailable dates.");
+                          } else if (nightsBetween(fromStr, toStr) < (venue?.minimum_nights ?? 1)) {
+                            setDateError(`Minimum stay is ${venue?.minimum_nights ?? 1} night(s).`);
+                          } else {
+                            setDateError("");
+                          }
+                        }
+                      }}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today || isDateDisabled(date);
+                      }}
+                      modifiersStyles={{
+                        unavailable: {
+                          // Keep it subtle or use a strike-through look
+                          backgroundColor: "#f5f5f5", 
+                          color: "#C8993C", 
+                          textDecoration: "line-through",
+                          opacity: 0.5
+                        },
+                        minStay: {
+                          // Use the lighter shade for the "range" highlight
+                          backgroundColor: "#E6D2AA", 
+                          color: "#C8993C", // Dark gold text on light gold background
+                          fontWeight: "bold"
+                        }
+                      }}
+                      numberOfMonths={1}
+                    />
+                  </div>
                 </div>
 
-                {/* Check-out */}
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ display: "block", marginBottom: 6 }}>Check-out</label>
-                  <input
-                    type="date"
-                    value={checkOut}
-                    onChange={(e) => {
-                      setCheckOut(e.target.value);
-                      setDateError("");
-                    }}
-                    min={minCheckoutDate}
-                    disabled={busy || availabilityLoading || isHost}
-                    style={{ width: "100%", padding: 10, boxSizing: "border-box" }}
-                  />
-                </div>
-
-                {/* Live validation feedback (prevents the "Kackhaus" screenshot bug) */}
                 {dateError && (
                   <div style={{ color: "crimson", fontSize: 14, marginBottom: 12 }}>{dateError}</div>
-                )}
-                {isRangeInvalid && checkIn && checkOut && (
-                  <div style={{ color: "crimson", fontSize: 14, marginBottom: 12 }}>
-                    Selected dates are not available or below minimum stay.
-                  </div>
                 )}
 
                 <div style={{ marginBottom: 12, fontSize: 14 }}>
@@ -561,14 +669,7 @@ export default function VenuePage() {
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button
                     onClick={bookAndPay}
-                    disabled={
-                      busy ||
-                      availabilityLoading ||
-                      isHost ||
-                      isRangeInvalid ||
-                      !checkIn ||
-                      !checkOut
-                    }
+                    disabled={busy || availabilityLoading || isHost || isRangeInvalid || !checkIn || !checkOut}
                     style={{
                       padding: "10px 14px",
                       borderRadius: 8,
@@ -577,13 +678,7 @@ export default function VenuePage() {
                       cursor: isHost || isRangeInvalid ? "not-allowed" : "pointer",
                     }}
                   >
-                    {busy
-                      ? "Working..."
-                      : availabilityLoading
-                      ? "Checking availability..."
-                      : isHost
-                      ? "You are the host"
-                      : "Book & pay"}
+                    {busy ? "Working..." : availabilityLoading ? "Checking..." : isHost ? "You are host" : "Book & pay"}
                   </button>
 
                   <button
@@ -597,7 +692,7 @@ export default function VenuePage() {
                       cursor: isHost ? "not-allowed" : "pointer",
                     }}
                   >
-                    {busy ? "Working..." : isHost ? "You are the host" : "Message host"}
+                    {busy ? "Working..." : isHost ? "You are host" : "Message host"}
                   </button>
                 </div>
 

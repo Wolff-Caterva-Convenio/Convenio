@@ -1,0 +1,61 @@
+/* Booking container */
+.booking-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 16px;
+  background: white;
+}
+
+/* Header */
+.booking-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+/* Calendar wrapper */
+.booking-calendar {
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 12px;
+  background: white;
+}
+
+/* Disabled calendar */
+.booking-calendar.disabled {
+  background: #fafafa;
+  opacity: 0.6;
+}
+
+/* Error */
+.booking-error {
+  color: crimson;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+/* Buttons */
+.booking-button {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.booking-button.primary {
+  background: #0070f3;
+  color: white;
+  border: none;
+}
+
+/* Clear button */
+.booking-clear {
+  font-size: 12px;
+  color: #0070f3;
+  background: none;
+  border: none;
+  cursor: pointer;
+}

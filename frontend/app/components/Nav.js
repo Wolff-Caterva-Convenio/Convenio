@@ -3,18 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+const TOKEN_KEY = "access_token";
+
 function hasAuthToken() {
-  const keys = ["token", "access_token", "auth_token", "jwt"];
-  for (const k of keys) {
-    const v = localStorage.getItem(k);
-    if (v && v.trim().length > 0) return true;
-  }
-  return false;
+  const v = localStorage.getItem(TOKEN_KEY);
+  return !!(v && v.trim().length > 0);
 }
 
 function clearAuthToken() {
-  const keys = ["token", "access_token", "auth_token", "jwt"];
-  for (const k of keys) localStorage.removeItem(k);
+  localStorage.removeItem(TOKEN_KEY);
+  window.dispatchEvent(new Event("convenio-auth-changed"));
 }
 
 export default function Nav() {
@@ -22,14 +20,19 @@ export default function Nav() {
   const linkStyle = { textDecoration: "none", color: "inherit" };
 
   useEffect(() => {
-    setLoggedIn(hasAuthToken());
-
-    function onStorage() {
+    function updateAuthState() {
       setLoggedIn(hasAuthToken());
     }
 
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    // initial check
+    updateAuthState();
+
+    // listen to our custom event (same tab + cross app)
+    window.addEventListener("convenio-auth-changed", updateAuthState);
+
+    return () => {
+      window.removeEventListener("convenio-auth-changed", updateAuthState);
+    };
   }, []);
 
   function logout() {
