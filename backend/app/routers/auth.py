@@ -9,6 +9,7 @@ from app.db.database import get_db
 from app.db.models import User
 from app.db.schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from app.dependencies.auth_dependencies import get_current_user
+from app.services.email_service import send_email  # Added email service
 
 router = APIRouter()
 
@@ -23,6 +24,19 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # -------------------------
+    # SEND WELCOME EMAIL
+    # -------------------------
+    send_email(
+        to=user.email,
+        subject="Welcome to Convenio",
+        html=f"""
+        <h2>Welcome to Convenio 🎉</h2>
+        <p>Your account has been successfully created.</p>
+        <p>You can now start booking venues.</p>
+        """
+    )
 
     return UserResponse(id=user.id, email=user.email)
 

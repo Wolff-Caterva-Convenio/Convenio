@@ -4,6 +4,10 @@ import os
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from fastapi import HTTPException
+from app.services.email_service import (
+    send_booking_confirmation_email,
+    send_host_notification_email,
+)
 
 # Configurable in dev/test to avoid "15 min hold" pain during local onboarding flows.
 PENDING_PAYMENT_EXPIRY_MINUTES = int(os.getenv("BOOKING_PENDING_PAYMENT_EXPIRY_MINUTES", "15"))

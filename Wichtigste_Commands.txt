@@ -45,7 +45,7 @@ GUEST
 
 docs login via CMD:
 
-curl -X POST http://127.0.0.1:8000/auth/login ^
+curl -X POST http://127.0.0.1:9000/auth/login ^
 -H "Content-Type: application/json" ^
 -d "{\"email\":\"svendavidwolff99@gmail.com\",\"password\":\"Gallanaturi#19\"}"
 

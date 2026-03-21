@@ -284,7 +284,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                             venue_title=venue.title,
                             check_in=str(booking.check_in),
                             check_out=str(booking.check_out),
-                            total_price=f"{booking.amount_guest_total / 100:.2f}".replace(".", ",") if hasattr(booking, "amount_guest_total") else "0,00"
+                            total_price=booking.amount_guest_total / 100
                         )
 
                     # -------- host email (SAFE) --------

@@ -102,6 +102,7 @@ export default function HostVenuePage() {
   const [settingCoverImageId, setSettingCoverImageId] = useState(null);
   const [deletingLegacyImage, setDeletingLegacyImage] = useState(false);
 
+  const [publishing, setPublishing] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -339,6 +340,29 @@ export default function HostVenuePage() {
     }
   }
 
+  async function publishVenue() {
+    setError("");
+    setSuccess("");
+    setPublishing(true);
+
+    try {
+      const token = getToken();
+
+      const res = await fetch(`${API_BASE}/venues/${venue_id}/publish`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      setSuccess("Venue published.");
+      await loadVenue();
+    } catch (e) {
+      setError(e?.message || String(e));
+    } finally {
+      setPublishing(false);
+    }
+  }
   async function unpublishVenue() {
     setError("");
     setSuccess("");
@@ -892,25 +916,40 @@ export default function HostVenuePage() {
         }}
       >
         <h3 style={{ marginTop: 0 }}>Publishing status</h3>
+
         <div style={{ marginBottom: 12, color: "#555" }}>
           Current status: <b>{venue.status || "draft"}</b>
         </div>
-        <div style={{ marginBottom: 12, fontSize: 14, color: "#666" }}>
-          Unpublish is connected. Price, minimum nights, and rules are now saved
-          through the main “Save details” action. Publish is still not wired.
+
+        <div style={{ display: "flex", gap: 10 }}>
+          {venue.status === "draft" ? (
+            <button
+              onClick={publishVenue}
+              disabled={publishing}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #ddd",
+                background: "white",
+              }}
+            >
+              {publishing ? "Publishing..." : "Publish venue"}
+            </button>
+          ) : (
+            <button
+              onClick={unpublishVenue}
+              disabled={unpublishing}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #ddd",
+                background: "white",
+              }}
+            >
+              {unpublishing ? "Unpublishing..." : "Unpublish venue"}
+            </button>
+          )}
         </div>
-        <button
-          onClick={unpublishVenue}
-          disabled={unpublishing}
-          style={{
-            padding: "8px 12px",
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            background: "white",
-          }}
-        >
-          {unpublishing ? "Unpublishing..." : "Unpublish venue"}
-        </button>
       </div>
 
       <div

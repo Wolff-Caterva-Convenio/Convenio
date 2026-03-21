@@ -1,8 +1,17 @@
-import os
 import resend
+import logging
 from fastapi import APIRouter
+from app.core.config import settings  # ✅ NEW
 
-resend.api_key = os.getenv("RESEND_API_KEY")
+# -------------------------
+# LOGGING (minimal, useful)
+# -------------------------
+logger = logging.getLogger(__name__)
+
+# -------------------------
+# RESEND CONFIG (FIXED)
+# -------------------------
+resend.api_key = settings.RESEND_API_KEY  # ✅ FIX
 
 router = APIRouter()
 
@@ -11,31 +20,40 @@ router = APIRouter()
 # HELPER: FORMAT EURO
 # =========================
 def format_eur(amount: float) -> str:
-    """
-    Converts:
-    120 -> "120,00"
-    99.5 -> "99,50"
-    """
     return f"{amount:.2f}".replace(".", ",")
 
 
 # =========================
 # CORE SEND FUNCTION
 # =========================
-
 def send_email(to: str, subject: str, html: str):
-    return resend.Emails.send({
-        "from": "noreply-convenio@wolff-caterva.com",
-        "to": to,
-        "subject": subject,
-        "html": html
-    })
+    try:
+        response = resend.Emails.send({
+            "from": settings.EMAIL_FROM,  # ✅ FIX
+            "to": [to],
+            "subject": subject,
+            "html": html
+        })
+
+        logger.info("Email sent", extra={
+            "to": to,
+            "subject": subject,
+            "response": response
+        })
+
+        return response
+
+    except Exception:
+        logger.exception("Email sending failed", extra={
+            "to": to,
+            "subject": subject
+        })
+        raise
 
 
 # =========================
 # TEST ROUTE (KEEP)
 # =========================
-
 @router.get("/test-email")
 def test_email():
     result = send_email(
@@ -49,7 +67,6 @@ def test_email():
 # =========================
 # BOOKING EMAILS
 # =========================
-
 def send_booking_confirmation_email(
     guest_email: str,
     venue_title: str,

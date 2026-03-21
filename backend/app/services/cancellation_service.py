@@ -13,6 +13,7 @@ from app.db.models.venue import Venue
 from app.db.models.cancellation_event import CancellationEvent
 from app.services.cancellation_policy import calculate_refund_ratio
 from app.services.payout_service import create_host_transfer
+from app.services.email_service import send_cancellation_email
 
 
 def _log_cancellation_event_and_enforce_policies(
@@ -233,6 +234,18 @@ def confirm_cancel(db: Session, current_user: User, *, booking_id: UUID) -> dict
 
         db.commit()
         db.refresh(booking)
+
+        # SEND CANCELLATION EMAIL
+        user = db.query(User).filter(User.id == booking.guest_user_id).first()
+        if user:
+            send_cancellation_email(
+                user_email=user.email,
+                venue_title=venue.title,
+                check_in=str(booking.check_in),
+                check_out=str(booking.check_out),
+                refund_amount=refund_amount / 100
+            )
+
         return {
             "booking": booking,
             "refund_ratio": ratio,
@@ -295,6 +308,17 @@ def confirm_cancel(db: Session, current_user: User, *, booking_id: UUID) -> dict
 
     db.commit()
     db.refresh(booking)
+
+    # SEND CANCELLATION EMAIL
+    user = db.query(User).filter(User.id == booking.guest_user_id).first()
+    if user:
+        send_cancellation_email(
+            user_email=user.email,
+            venue_title=venue.title,
+            check_in=str(booking.check_in),
+            check_out=str(booking.check_out),
+            refund_amount=refund_amount / 100
+        )
 
     return {
         "booking": booking,
