@@ -269,8 +269,9 @@ export default function BookingCard({ venue, me, API_BASE }) {
       window.location.href = session.checkout_url;
     } catch (e) {
       setError(e.message);
+
       if (bookingId) {
-        fetch(`${API_BASE}/venues/bookings/${bookingId}/cancel`, {
+        fetch(`${API_BASE}/payments/bookings/${bookingId}/cancel`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         }).catch(console.error);

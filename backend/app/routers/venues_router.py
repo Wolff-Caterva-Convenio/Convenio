@@ -334,6 +334,24 @@ def delete_gallery_image(
     return venue
 
 
+@router.post("/{venue_id}/publish", response_model=VenueOut)
+def publish_venue(
+    venue_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    venue = _get_owned_venue_or_403(db, venue_id, current_user)
+
+    if venue.status == "published":
+        return venue
+
+    venue.status = "published"
+    db.commit()
+    db.refresh(venue)
+
+    return venue
+
+
 @router.post("/{venue_id}/unpublish", response_model=VenueOut)
 def unpublish_venue(
     venue_id: UUID,
@@ -342,8 +360,10 @@ def unpublish_venue(
 ):
     venue = _get_owned_venue_or_403(db, venue_id, current_user)
 
-    venue.status = "draft"
+    if venue.status == "draft":
+        return venue
 
+    venue.status = "draft"
     db.commit()
     db.refresh(venue)
 
