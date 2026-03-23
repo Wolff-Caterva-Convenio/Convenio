@@ -44,11 +44,11 @@ def send_email(to: str, subject: str, html: str):
         return response
 
     except Exception:
-        logger.exception("Email sending failed", extra={
+        logger.exception("Email sending failed (non-blocking)", extra={
             "to": to,
             "subject": subject
         })
-        raise
+        return None
 
 
 # =========================

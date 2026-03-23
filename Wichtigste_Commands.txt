@@ -16,7 +16,7 @@ backend\
 
 3.) 3. cmd
 
-stripe listen --forward-to http://localhost:8000/webhooks/stripe
+stripe listen --forward-to http://localhost:9000/webhooks/stripe
 
 4.) 4. cmd
 frontend\

@@ -138,13 +138,11 @@ async function handleUpload(e) {
           )}
         </div>
 
-        {editing && (
-          <input
-            type="file"
-            onChange={handleUpload}
-            style={{ marginTop: 10 }}
-          />
-        )}
+        <input
+          type="file"
+          onChange={handleUpload}
+          style={{ marginTop: 10 }}
+        />
 
         <div style={{ flex: 1 }}>
           <p style={styles.label}>Email</p>

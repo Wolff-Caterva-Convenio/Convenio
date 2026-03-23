@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # -------------------------
     # EMAIL (ADD THESE)
     # -------------------------
-    RESEND_API_KEY: str
+    RESEND_API_KEY: str | None = None
     EMAIL_FROM: str = "noreply-convenio@wolff-caterva.com"
 
 

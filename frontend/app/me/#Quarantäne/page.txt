@@ -1,0 +1,232 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiFetch } from "../lib/api";
+
+export default function MePage() {
+  const router = useRouter();
+
+  const [user, setUser] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const data = await apiFetch("/me");
+        setUser(data);
+      } catch (err) {
+        localStorage.removeItem("access_token");
+        router.push("/login?next=/me");
+      }
+    }
+
+    loadUser();
+  }, [router]);
+
+  async function handleLogout() {
+    localStorage.removeItem("access_token");
+    window.dispatchEvent(new Event("convenio-auth-changed"));
+    router.push("/");
+  }
+
+  async function handleDeleteAccount() {
+    const confirmed = confirm(
+      "Are you sure you want to permanently delete your account?"
+    );
+
+    if (!confirmed) return;
+
+    setBusy(true);
+
+    try {
+      await apiFetch("/auth/me", { method: "DELETE" });
+
+      localStorage.removeItem("access_token");
+      window.dispatchEvent(new Event("convenio-auth-changed"));
+
+      alert("Account deleted.");
+      router.push("/");
+    } catch (e) {
+      alert(e.message || "Deletion failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!user) {
+    return (
+      <main style={styles.container}>
+        <p>Loading...</p>
+      </main>
+    );
+  }
+
+  return (
+    <main style={styles.container}>
+      <h1 style={styles.title}>My Account</h1>
+
+      {/* PROFILE CARD */}
+      <div style={styles.card}>
+        <div style={styles.avatar}>
+          {user.email.charAt(0).toUpperCase()}
+        </div>
+
+        <div>
+          <p style={styles.label}>Email</p>
+          <p style={styles.value}>{user.email}</p>
+
+          <p style={styles.label}>User ID</p>
+          <p style={styles.valueSmall}>{user.id}</p>
+        </div>
+      </div>
+
+      {/* NAVIGATION */}
+      <div style={styles.section}>
+        <h2 style={styles.sectionTitle}>Your Activity</h2>
+
+        <div style={styles.grid}>
+          <button onClick={() => router.push("/my-bookings")} style={styles.box}>
+            My Bookings
+          </button>
+
+          <button onClick={() => router.push("/my-venues")} style={styles.box}>
+            My Venues
+          </button>
+
+          <button onClick={() => router.push("/threads")} style={styles.box}>
+            Messages
+          </button>
+        </div>
+      </div>
+
+      {/* ACCOUNT ACTIONS */}
+      <div style={styles.section}>
+        <h2 style={styles.sectionTitle}>Account</h2>
+
+        <button onClick={handleLogout} style={styles.secondaryBtn}>
+          Log out
+        </button>
+      </div>
+
+      {/* DANGER ZONE */}
+      <div style={styles.dangerZone}>
+        <h2 style={styles.dangerTitle}>Danger Zone</h2>
+
+        <button
+          onClick={handleDeleteAccount}
+          disabled={busy}
+          style={styles.deleteBtn}
+        >
+          {busy ? "Deleting..." : "Delete Account"}
+        </button>
+      </div>
+    </main>
+  );
+}
+
+/* =========================
+   STYLES
+========================= */
+
+const styles = {
+  container: {
+    maxWidth: 900,
+    margin: "40px auto",
+    padding: "0 20px",
+    fontFamily: "system-ui",
+  },
+
+  title: {
+    marginBottom: 30,
+  },
+
+  card: {
+    display: "flex",
+    gap: 20,
+    padding: 20,
+    border: "1px solid #eee",
+    borderRadius: 12,
+    marginBottom: 30,
+    alignItems: "center",
+  },
+
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: "50%",
+    background: "#111",
+    color: "white",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 24,
+    fontWeight: "bold",
+  },
+
+  label: {
+    fontSize: 12,
+    color: "#777",
+    marginBottom: 4,
+  },
+
+  value: {
+    fontSize: 16,
+    marginBottom: 10,
+  },
+
+  valueSmall: {
+    fontSize: 12,
+    color: "#999",
+  },
+
+  section: {
+    marginBottom: 40,
+  },
+
+  sectionTitle: {
+    marginBottom: 16,
+  },
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: 12,
+  },
+
+  box: {
+    padding: 16,
+    borderRadius: 10,
+    border: "1px solid #ddd",
+    background: "white",
+    cursor: "pointer",
+  },
+
+  secondaryBtn: {
+    padding: 12,
+    borderRadius: 8,
+    border: "1px solid #ccc",
+    background: "white",
+    cursor: "pointer",
+  },
+
+  dangerZone: {
+    borderTop: "1px solid #eee",
+    paddingTop: 30,
+  },
+
+  dangerTitle: {
+    color: "crimson",
+    marginBottom: 12,
+  },
+
+  deleteBtn: {
+    padding: 12,
+    borderRadius: 8,
+    border: "none",
+    background: "crimson",
+    color: "white",
+    cursor: "pointer",
+  },
+};

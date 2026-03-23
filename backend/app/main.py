@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     app.include_router(auth_router)
+    app.include_router(auth_router, prefix="/auth")
     app.include_router(bookings_router)
     app.include_router(venues_router)
     app.include_router(availability_router)

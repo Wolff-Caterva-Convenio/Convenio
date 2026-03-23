@@ -20,3 +20,12 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
+    name: str | None = None
+    company_name: str | None = None
+    avatar_url: str | None = None
+
+class UserUpdateRequest(BaseModel):
+    email: EmailStr | None = None
+    name: str | None = None
+    company_name: str | None = None
+    avatar_url: str | None = None

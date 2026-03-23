@@ -248,14 +248,13 @@ export default function ThreadPage() {
 function Avatar({ sender }) {
   return (
     <div style={{
-      width: 55,
-      height: 55,
+      width: 40,
+      height: 40,
       borderRadius: "50%",
       background: "#eee",
       overflow: "hidden",
       textAlign: "center",
-      lineHeight: "70px",
-      fontSize: 16
+      lineHeight: "32px"
     }}>
       {sender?.avatar_url ? (
         <img
