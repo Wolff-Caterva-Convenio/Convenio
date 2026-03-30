@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost, TOKEN_KEY } from "../lib/api";
+import { apiPost } from "../lib/api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -10,11 +10,13 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function handleRegister(e) {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
     if (!email || !password) {
       setError("Please fill in all fields.");
@@ -24,38 +26,18 @@ export default function RegisterPage() {
     setBusy(true);
 
     try {
-      const res = await apiPost("/auth/register", {
+      await apiPost("/auth/register", {
         email,
         password,
       });
 
-      // 🔑 Case A: backend returns token directly
-      if (res?.access_token) {
-        localStorage.setItem(TOKEN_KEY, res.access_token);
+      // ✅ Correct behavior: wait for email verification
+      setSuccess("Account created! Please check your email to verify your account.");
 
-        // notify app
-        window.dispatchEvent(new Event("convenio-auth-changed"));
+      // optional: clear inputs
+      setEmail("");
+      setPassword("");
 
-        // redirect to home (or venues)
-        router.push("/venues");
-        return;
-      }
-
-      // 🔁 Case B: fallback → auto-login
-      const loginRes = await apiPost("/auth/login", {
-        email,
-        password,
-      });
-
-      if (!loginRes?.access_token) {
-        throw new Error("Registration succeeded but login failed.");
-      }
-
-      localStorage.setItem(TOKEN_KEY, loginRes.access_token);
-
-      window.dispatchEvent(new Event("convenio-auth-changed"));
-
-      router.push("/venues");
     } catch (e) {
       setError(e.message || "Registration failed.");
     } finally {
@@ -77,6 +59,12 @@ export default function RegisterPage() {
       {error && (
         <div style={{ color: "crimson", marginBottom: 12 }}>
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div style={{ color: "green", marginBottom: 12 }}>
+          {success}
         </div>
       )}
 

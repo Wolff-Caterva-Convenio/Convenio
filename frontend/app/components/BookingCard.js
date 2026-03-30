@@ -6,7 +6,13 @@ import "react-day-picker/dist/style.css";
 import { useRouter } from "next/navigation";
 import VenueGallery from "./VenueGallery";
 
-export default function BookingCard({ venue, me, API_BASE }) {
+export default function BookingCard({
+  venue,
+  me,
+  API_BASE,
+  initialFrom,
+  initialTo,
+}) {
   const router = useRouter();
   const venueId = venue?.id;
 
@@ -20,6 +26,24 @@ export default function BookingCard({ venue, me, API_BASE }) {
   const [acceptRules, setAcceptRules] = useState(false);
   const [dateError, setDateError] = useState("");
   const [error, setError] = useState("");
+
+  // ✅ NEW: Prefill from search (CRITICAL)
+  useEffect(() => {
+    if (!initialFrom || !initialTo) return;
+
+    try {
+      const fromDate = new Date(`${initialFrom}T00:00:00Z`);
+      const toDate = new Date(`${initialTo}T00:00:00Z`);
+
+      if (isNaN(fromDate) || isNaN(toDate)) return;
+
+      setRange({ from: fromDate, to: toDate });
+      setCheckIn(initialFrom);
+      setCheckOut(initialTo);
+    } catch (e) {
+      console.error("Prefill failed:", e);
+    }
+  }, [initialFrom, initialTo]);
 
   // --- LOGIC HELPER: Is the current user the host? ---
   const isHost = useMemo(() => 

@@ -151,3 +151,90 @@ def send_cancellation_email(
         subject="Your booking was cancelled",
         html=html
     )
+
+def send_payment_confirmation_email(
+    user_email: str,
+    venue_title: str,
+    check_in: str,
+    check_out: str,
+    amount_paid: float
+):
+    formatted_amount = format_eur(amount_paid)
+
+    html = f"""
+    <h2>Payment Confirmed</h2>
+
+    <p>Your payment was successful and your booking is now confirmed.</p>
+
+    <ul>
+        <li><strong>Venue:</strong> {venue_title}</li>
+        <li><strong>Check-in:</strong> {check_in}</li>
+        <li><strong>Check-out:</strong> {check_out}</li>
+        <li><strong>Amount Paid:</strong> €{formatted_amount}</li>
+    </ul>
+
+    <p>Thank you for using Convenio.</p>
+    """
+
+    return send_email(
+        to=user_email,
+        subject="Your payment was successful",
+        html=html
+    )
+
+
+def send_host_cancellation_email(
+    host_email: str,
+    venue_title: str,
+    check_in: str,
+    check_out: str
+):
+    html = f"""
+    <h2>Booking Cancelled</h2>
+
+    <p>A booking for your venue has been cancelled.</p>
+
+    <ul>
+        <li><strong>Venue:</strong> {venue_title}</li>
+        <li><strong>Check-in:</strong> {check_in}</li>
+        <li><strong>Check-out:</strong> {check_out}</li>
+    </ul>
+
+    <p>Please log in to your dashboard for the latest booking status.</p>
+    """
+
+    return send_email(
+        to=host_email,
+        subject="A booking for your venue was cancelled",
+        html=html
+    )
+
+def send_cancellation_email(
+    user_email: str,
+    venue_title: str,
+    check_in: str,
+    check_out: str,
+    refund_amount: float
+):
+    formatted_refund = format_eur(refund_amount)
+
+    html = f"""
+    <h2>Booking Cancelled</h2>
+
+    <p>Your booking has been successfully cancelled.</p>
+
+    <ul>
+        <li><strong>Venue:</strong> {venue_title}</li>
+        <li><strong>Check-in:</strong> {check_in}</li>
+        <li><strong>Check-out:</strong> {check_out}</li>
+        <li><strong>Refund:</strong> €{formatted_refund}</li>
+    </ul>
+
+    <p>If you have any questions, please contact support.</p>
+    """
+
+    return send_email(
+        to=user_email,
+        subject="Your booking was cancelled",
+        html=html
+    )

@@ -15,8 +15,13 @@ from app.db.models.stripe_connected_account import StripeConnectedAccount
 from app.db.models.user import User
 from app.db.models.venue import Venue
 from app.services.stripe_event_lock import reserve_stripe_event
-from app.services.email_service import send_booking_confirmation_email, send_host_notification_email
 from app.services import cancellation_service
+from app.services.email_service import (
+    send_booking_confirmation_email,
+    send_host_notification_email,
+    send_payment_confirmation_email,
+)
+
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -287,6 +292,14 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                             total_price=booking.amount_guest_total / 100
                         )
 
+                        send_payment_confirmation_email(
+                            user_email=guest_email,
+                            venue_title=venue.title,
+                            check_in=str(booking.check_in),
+                            check_out=str(booking.check_out),
+                            amount_paid=booking.amount_guest_total / 100
+                        )
+
                     # -------- host email (SAFE) --------
                     host_email = None
 
@@ -325,42 +338,6 @@ class ConfirmCancelResponse(BaseModel):
     currency: str
     new_status: str
 
-
-@router.post("/bookings/{booking_id}/cancel", response_model=CancelBookingResponse)
-def cancel_booking_request(
-    booking_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    res = cancellation_service.request_cancel(db, current_user, booking_id=booking_id)
-    booking = res["booking"]
-    return CancelBookingResponse(
-        booking_id=booking.id,
-        refund_ratio=float(res["refund_ratio"]),
-        new_status=str(res["new_status"]),
-    )
-
-
-@router.post("/bookings/{booking_id}/cancel/confirm", response_model=ConfirmCancelResponse)
-def cancel_booking_confirm(
-    booking_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    res = cancellation_service.confirm_cancel(db, current_user, booking_id=booking_id)
-    booking = res["booking"]
-    return ConfirmCancelResponse(
-        booking_id=booking.id,
-        refund_ratio=float(res["refund_ratio"]),
-        refund_amount=int(res["refund_amount"]),
-        currency=str(res["currency"]),
-        new_status=str(res["new_status"]),
-    )
-
-
-# -----------------------------
-# checkout session -> booking lookup (safe, read-only)
-# -----------------------------
 @router.get("/stripe/session/{session_id}")
 def get_booking_from_session(session_id: str, db: Session = Depends(get_db)):
     payment = (
@@ -382,4 +359,55 @@ def get_booking_from_session(session_id: str, db: Session = Depends(get_db)):
         "check_out": booking.check_out,
         "guest_total": booking.amount_guest_total,
         "currency": booking.currency,
+    }
+
+@router.get("/bookings/{booking_id}/status")
+def get_payment_status(
+    booking_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    booking = db.query(Booking).filter(Booking.id == booking_id).one_or_none()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    venue = db.query(Venue).filter(Venue.id == booking.venue_id).one_or_none()
+    if not venue:
+        raise HTTPException(status_code=404, detail="Venue not found")
+
+    # Authorization (same pattern everywhere else)
+    is_guest = booking.guest_user_id == current_user.id
+    is_host = venue.host_user_id == current_user.id
+    if not (is_guest or is_host):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    payment = (
+        db.query(Payment)
+        .filter(Payment.booking_id == booking.id)
+        .one_or_none()
+    )
+
+    return {
+        "booking_id": str(booking.id),
+
+        # 🔑 SOURCE OF TRUTH
+        "booking_status": booking.status,
+        "is_paid": booking.status == "CONFIRMED",
+
+        # Stripe / payment layer
+        "payment_status": payment.status if payment else None,
+
+        # Useful for frontend recovery
+        "checkout_session_id": payment.stripe_checkout_session_id if payment else None,
+        "payment_intent_id": payment.stripe_payment_intent_id if payment else None,
+
+        # Pricing snapshot (already stored correctly)
+        "currency": booking.currency,
+        "guest_total": booking.amount_guest_total,
+        "platform_fee": booking.amount_platform_fee,
+        "host_payout": booking.amount_host_payout,
+
+        # Refund state
+        "refunded_amount": payment.refunded_amount_total if payment else 0,
+        "payout_status": payment.payout_status if payment else None,
     }

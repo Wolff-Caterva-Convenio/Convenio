@@ -1,0 +1,39 @@
+"use client";
+
+export default function BookingActionsCard({
+  booking,
+  onReview,
+  alreadyReviewed,
+}) {
+  const canReview =
+    booking.status === "COMPLETED" && !alreadyReviewed;
+
+  return (
+    <>
+      {/* REVIEW BUTTON */}
+      {canReview && (
+        <button
+          onClick={() => onReview(booking)}
+          style={{
+            marginTop: 10,
+            background: "#2563eb",
+            color: "white",
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          Leave review
+        </button>
+      )}
+
+      {/* REVIEW STATUS */}
+      {alreadyReviewed && (
+        <div style={{ marginTop: 10, color: "#059669" }}>
+          Review submitted ✓
+        </div>
+      )}
+    </>
+  );
+}

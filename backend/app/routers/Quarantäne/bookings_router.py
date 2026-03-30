@@ -14,11 +14,12 @@ from app.db.models.venue import Venue
 from app.dependencies.auth_dependencies import get_current_user
 from app.schemas.bookings import BookingCreate, BookingOut
 from app.schemas.calendar import CalendarEventOut
+from app.services import cancellation_service
+from pydantic import BaseModel
 from app.services.booking_service import (
     expire_old_pending_payment_bookings,
     complete_past_confirmed_bookings,
 )
-from app.services.email_service import send_booking_confirmation_email, send_host_notification_email
 
 # NEW: canonical cancellation service
 from app.services import cancellation_service
@@ -76,34 +77,6 @@ def create_booking(
         raise HTTPException(status_code=409, detail="Dates already booked")
 
     db.refresh(booking)
-
-    from app.services.email_service import send_booking_confirmation_email, send_host_notification_email
-
-    send_booking_confirmation_email(
-        guest_email=current_user.email,
-        venue_title=venue.title,
-        check_in=str(booking.check_in),
-        check_out=str(booking.check_out),
-        total_price=booking.total_price if hasattr(booking, "total_price") else 0
-    )
-
-    # resolve host email safely
-    host_email = None
-    if hasattr(venue, "owner") and venue.owner:
-        host_email = venue.owner.email
-    elif hasattr(venue, "owner_id"):
-        host = db.query(User).filter(User.id == venue.owner_id).first()
-        if host:
-            host_email = host.email
-
-    if host_email:
-        send_host_notification_email(
-            host_email=host_email,
-            guest_email=current_user.email,
-            venue_title=venue.title,
-            check_in=str(booking.check_in),
-            check_out=str(booking.check_out)
-        )
 
     return booking
 
@@ -336,22 +309,6 @@ def get_venue_calendar(
     events.sort(key=lambda e: (e.start, e.end, e.type))
     return events
 
-@router.get("/{venue_id}/availability")
-def get_public_availability(
-    venue_id: UUID,
-    start: date,
-    end: date,
-    db: Session = Depends(get_db),
-):
-    """
-    Public endpoint used by the frontend booking page.
-
-    Returns all unavailable date ranges for a venue
-    (both confirmed bookings and host availability blocks).
-
-    No authentication required.
-    """
-
     if start > end:
         raise HTTPException(status_code=400, detail="start must be before end")
 
@@ -406,3 +363,45 @@ def get_public_availability(
         "venue_id": venue_id,
         "unavailable": unavailable,
     }
+
+    class CancelBookingResponse(BaseModel):
+        booking_id: UUID
+        refund_ratio: float
+        new_status: str
+
+    class ConfirmCancelResponse(BaseModel):
+        booking_id: UUID
+        refund_ratio: float
+        refund_amount: int
+        currency: str
+        new_status: str
+
+    @router.post("/bookings/{booking_id}/cancel", response_model=CancelBookingResponse)
+    def cancel_booking_request(
+        booking_id: UUID,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+    ):
+        res = cancellation_service.request_cancel(db, current_user, booking_id=booking_id)
+        booking = res["booking"]
+        return CancelBookingResponse(
+            booking_id=booking.id,
+            refund_ratio=float(res["refund_ratio"]),
+            new_status=str(res["new_status"]),
+        )
+
+    @router.post("/bookings/{booking_id}/cancel/confirm", response_model=ConfirmCancelResponse)
+    def cancel_booking_confirm(
+        booking_id: UUID,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+    ):
+        res = cancellation_service.confirm_cancel(db, current_user, booking_id=booking_id)
+        booking = res["booking"]
+        return ConfirmCancelResponse(
+            booking_id=booking.id,
+            refund_ratio=float(res["refund_ratio"]),
+            refund_amount=int(res["refund_amount"]),
+            currency=str(res["currency"]),
+            new_status=str(res["new_status"]),
+        )

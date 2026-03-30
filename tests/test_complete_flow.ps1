@@ -101,7 +101,7 @@ $seenConfirmedOrCompleted = $false
 for ($i = 0; $i -lt 15; $i++) {
 
     $myBookings = Invoke-RestMethod -Method GET `
-        -Uri "$BASE/venues/my-bookings" `
+        -Uri "$BASE/venues/me" `
         -Headers @{ Authorization = "Bearer $GUEST_TOKEN" }
 
     $current = $myBookings | Where-Object { $_.id -eq $bookingId }
@@ -130,7 +130,7 @@ $completed = $false
 for ($i = 0; $i -lt 15; $i++) {
 
     $myBookings = Invoke-RestMethod -Method GET `
-        -Uri "$BASE/venues/my-bookings" `
+        -Uri "$BASE/venues/me" `
         -Headers @{ Authorization = "Bearer $GUEST_TOKEN" }
 
     $current = $myBookings | Where-Object { $_.id -eq $bookingId }

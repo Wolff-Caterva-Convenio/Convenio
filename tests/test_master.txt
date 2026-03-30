@@ -1,0 +1,147 @@
+$ErrorActionPreference = "Stop"
+$BASE = "http://127.0.0.1:9000"
+
+function Log($msg) {
+    Write-Host "[INFO] $msg"
+}
+
+function Login($email, $password) {
+    $res = Invoke-RestMethod -Method POST -Uri "$BASE/login" `
+        -ContentType "application/json" `
+        -Body (@{ email=$email; password=$password } | ConvertTo-Json)
+
+    if (-not $res.access_token) { throw "Login failed for $email" }
+    return $res.access_token
+}
+
+function GetTestVenue() {
+    $venues = Invoke-RestMethod -Method GET -Uri "$BASE/venues"
+    $v = $venues | Where-Object { $_.status -eq "published" -and $_.title -match '^\[TEST\]' } | Select-Object -First 1
+
+    if (-not $v) { throw "No [TEST] published venue found" }
+    return $v.id
+}
+
+function CreateBooking($token, $venueId, $checkIn, $checkOut) {
+    $booking = Invoke-RestMethod -Method POST `
+        -Uri "$BASE/venues/$venueId/bookings" `
+        -Headers @{ Authorization = "Bearer $token" } `
+        -ContentType "application/json" `
+        -Body (@{ check_in=$checkIn; check_out=$checkOut } | ConvertTo-Json)
+
+    if (-not $booking.id) { throw "Booking failed" }
+    return $booking.id
+}
+
+function CreateCheckout($token, $bookingId) {
+    $res = Invoke-RestMethod -Method POST `
+        -Uri "$BASE/payments/stripe/checkout-session" `
+        -Headers @{ Authorization = "Bearer $token" } `
+        -ContentType "application/json" `
+        -Body (@{ booking_id=$bookingId; accept_rules_and_gtc=$true } | ConvertTo-Json)
+
+    if (-not $res.checkout_url) { throw "Checkout failed" }
+
+    Write-Host ""
+    Write-Host "OPEN THIS URL:"
+    Write-Host $res.checkout_url
+    Write-Host "Use card: 4242 4242 4242 4242"
+    Read-Host "Press ENTER after payment"
+}
+
+function GetMyBookings($token) {
+    return Invoke-RestMethod -Method GET `
+        -Uri "$BASE/venues/me" `
+        -Headers @{ Authorization = "Bearer $token" }
+}
+
+function WaitForStatus($token, $bookingId, $targetStatuses) {
+    for ($i = 0; $i -lt 20; $i++) {
+        $b = GetMyBookings $token | Where-Object { $_.id -eq $bookingId }
+
+        if ($b -and $targetStatuses -contains $b.status) {
+            return $b
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
+    throw "Timeout waiting for status: $targetStatuses"
+}
+
+function Test-FullBookingFlow {
+    Log "Running FULL BOOKING FLOW"
+
+    $guest = Login "guest@test.com" "12345678"
+    $venueId = GetTestVenue
+
+    $checkIn  = (Get-Date).AddDays(30).ToString("yyyy-MM-dd")
+    $checkOut = (Get-Date).AddDays(31).ToString("yyyy-MM-dd")
+
+    $bookingId = CreateBooking $guest $venueId $checkIn $checkOut
+    CreateCheckout $guest $bookingId
+
+    $b = WaitForStatus $guest $bookingId @("CONFIRMED","COMPLETED")
+
+    Log "PASSED: Full booking flow ($($b.status))"
+}
+
+function Test-CompletionFlow {
+    Log "Running COMPLETION FLOW"
+
+    $guest = Login "guest@test.com" "12345678"
+    $venueId = GetTestVenue
+
+    $checkIn  = (Get-Date).AddDays(-40).ToString("yyyy-MM-dd")
+    $checkOut = (Get-Date).AddDays(-39).ToString("yyyy-MM-dd")
+
+    $bookingId = CreateBooking $guest $venueId $checkIn $checkOut
+    CreateCheckout $guest $bookingId
+
+    $b = WaitForStatus $guest $bookingId @("COMPLETED")
+
+    Log "PASSED: Completion flow"
+}
+
+function Test-CancelRefund {
+    Log "Running CANCEL + REFUND"
+
+    $guest = Login "guest@test.com" "12345678"
+    $venueId = GetTestVenue
+
+    $checkIn  = (Get-Date).AddMonths(3).ToString("yyyy-MM-dd")
+    $checkOut = (Get-Date).AddMonths(3).AddDays(1).ToString("yyyy-MM-dd")
+
+    $bookingId = CreateBooking $guest $venueId $checkIn $checkOut
+    CreateCheckout $guest $bookingId
+
+    WaitForStatus $guest $bookingId @("CONFIRMED")
+
+    Invoke-RestMethod -Method POST `
+        -Uri "$BASE/payments/bookings/$bookingId/cancel" `
+        -Headers @{ Authorization = "Bearer $guest" } | Out-Null
+
+    $res = Invoke-RestMethod -Method POST `
+        -Uri "$BASE/payments/bookings/$bookingId/cancel/confirm" `
+        -Headers @{ Authorization = "Bearer $guest" }
+
+    if ($res.new_status -ne "CANCELLED") {
+        throw "Cancel failed"
+    }
+
+    Log "PASSED: Cancel + refund"
+}
+
+Write-Host ""
+Write-Host "===================================="
+Write-Host "CONVENIO MASTER TEST SUITE"
+Write-Host "===================================="
+
+Test-FullBookingFlow
+Test-CompletionFlow
+Test-CancelRefund
+
+Write-Host ""
+Write-Host "===================================="
+Write-Host "ALL TESTS PASSED"
+Write-Host "===================================="

@@ -1,5 +1,7 @@
 from pathlib import Path
 from uuid import UUID
+from datetime import date
+from fastapi import Query
 import uuid
 
 from fastapi import APIRouter, Depends, status, HTTPException, UploadFile, File
@@ -9,6 +11,8 @@ from app.db.database import get_db
 from app.db.models import User, Venue
 from app.db.models.booking import Booking
 from app.db.models.venue_image import VenueImage
+from app.db.models.availability_block import AvailabilityBlock
+from app.db.models.booking import Booking
 from app.dependencies.auth_dependencies import get_current_user
 from app.schemas.venues import (
     VenueCreate,
@@ -112,8 +116,11 @@ def list_my_venues(
 def search_venues(
     city: str | None = None,
     min_capacity: int | None = None,
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
     db: Session = Depends(get_db),
 ):
+    # ✅ KEEP THIS (your existing filters)
     query = (
         db.query(Venue)
         .options(selectinload(Venue.images))
@@ -126,7 +133,47 @@ def search_venues(
     if min_capacity:
         query = query.filter(Venue.capacity >= min_capacity)
 
-    return query.all()
+    venues = query.all()  # 👈 instead of returning immediately
+
+    # ✅ NEW: only apply availability filter if dates exist
+    if not from_date or not to_date:
+        return venues
+
+    available_venues = []
+
+    for venue in venues:
+        # Check blocks
+        overlapping_block = (
+            db.query(AvailabilityBlock)
+            .filter(
+                AvailabilityBlock.venue_id == venue.id,
+                AvailabilityBlock.start_date < to_date,
+                AvailabilityBlock.end_date > from_date,
+            )
+            .first()
+        )
+
+        if overlapping_block:
+            continue
+
+        # Check bookings
+        overlapping_booking = (
+            db.query(Booking)
+            .filter(
+                Booking.venue_id == venue.id,
+                Booking.status.in_(["PENDING_PAYMENT", "CONFIRMED"]),
+                Booking.check_in < to_date,
+                Booking.check_out > from_date,
+            )
+            .first()
+        )
+
+        if overlapping_booking:
+            continue
+
+        available_venues.append(venue)
+
+    return available_venues
 
 
 @router.get("/{venue_id}", response_model=VenueOut)

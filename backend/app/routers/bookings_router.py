@@ -14,18 +14,52 @@ from app.db.models.venue import Venue
 from app.dependencies.auth_dependencies import get_current_user
 from app.schemas.bookings import BookingCreate, BookingOut
 from app.schemas.calendar import CalendarEventOut
+from app.services import cancellation_service
+from app.services.reviews_service import has_user_reviewed_booking
 from app.services.booking_service import (
     expire_old_pending_payment_bookings,
     complete_past_confirmed_bookings,
 )
 
-# NEW: canonical cancellation service
-from app.services import cancellation_service
+from pydantic import BaseModel
 
-router = APIRouter(prefix="/venues", tags=["bookings"])
+class CancelBookingResponse(BaseModel):
+    booking_id: UUID
+    refund_ratio: float
+    new_status: str
+
+class ConfirmCancelResponse(BaseModel):
+    booking_id: UUID
+    refund_ratio: float
+    refund_amount: int
+    currency: str
+    new_status: str
+
+# NEW: canonical cancellation service
+
+router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 ACTIVE_STATUSES = ["PENDING_PAYMENT", "CONFIRMED"]
 
+
+@router.get("/{booking_id}/review-status")
+def review_status(
+    booking_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    if booking.guest_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    already_reviewed = has_user_reviewed_booking(
+        db, booking_id, current_user
+    )
+
+    return {"already_reviewed": already_reviewed}
 
 @router.post("/{venue_id}/bookings", response_model=BookingOut, status_code=201)
 def create_booking(
@@ -77,6 +111,24 @@ def create_booking(
     db.refresh(booking)
 
     return booking
+
+@router.post("/bookings/{booking_id}/cancel/confirm", response_model=ConfirmCancelResponse)
+def confirm_cancel_booking(
+    booking_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    res = cancellation_service.confirm_cancel(
+        db, current_user, booking_id=booking_id
+    )
+
+    return ConfirmCancelResponse(
+        booking_id=res["booking"].id,
+        refund_ratio=float(res["refund_ratio"]),
+        refund_amount=int(res["refund_amount"]),
+        currency=res["currency"],
+        new_status=res["new_status"],
+    )
 
 @router.get("/{venue_id}/bookings", response_model=list[BookingOut])
 def list_bookings_for_venue(
@@ -134,36 +186,12 @@ def list_bookings_for_venue(
     return q.order_by(Booking.created_at.desc()).all()
 
 
-@router.get("/my-bookings", response_model=list[BookingOut])
-def list_my_bookings(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    expire_old_pending_payment_bookings(db)
-    complete_past_confirmed_bookings(db)
-
-    return (
-        db.query(Booking)
-        .filter(Booking.guest_user_id == current_user.id)
-        .order_by(Booking.created_at.desc())
-        .all()
-    )
-
-
-@router.post("/bookings/{booking_id}/cancel", response_model=BookingOut)
+@router.post("/bookings/{booking_id}/cancel")
 def cancel_booking(
     booking_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Compatibility endpoint.
-
-    Behavior:
-      - If PENDING_PAYMENT: cancel locally (no payment/refund exists yet).
-      - If CONFIRMED: delegate to canonical cancellation service (CANCEL_REQUESTED).
-      - If already CANCELLED/EXPIRED: no-op (return booking).
-    """
     expire_old_pending_payment_bookings(db)
     complete_past_confirmed_bookings(db)
 
@@ -175,29 +203,43 @@ def cancel_booking(
     if not venue:
         raise HTTPException(status_code=404, detail="Venue not found")
 
-    if getattr(venue, 'status', '') == 'suspended':
-        raise HTTPException(status_code=409, detail='Venue is suspended')
-
     is_guest = booking.guest_user_id == current_user.id
     is_host = venue.host_user_id == current_user.id
     if not (is_guest or is_host):
         raise HTTPException(status_code=403, detail="Not allowed")
 
+    # -----------------------------
+    # CASE 1: Already terminal
+    # -----------------------------
     if booking.status in ("CANCELLED", "EXPIRED"):
         return booking
 
+    # -----------------------------
+    # CASE 2: PENDING_PAYMENT (NO STRIPE)
+    # -----------------------------
     if booking.status == "PENDING_PAYMENT":
         booking.status = "CANCELLED"
         db.commit()
         db.refresh(booking)
         return booking
 
+    # -----------------------------
+    # CASE 3: CONFIRMED → canonical flow
+    # -----------------------------
     if booking.status == "CONFIRMED":
-        cancellation_service.request_cancel(db, current_user, booking_id=booking_id)
-        db.refresh(booking)
-        return booking
+        res = cancellation_service.request_cancel(
+            db, current_user, booking_id=booking_id
+        )
+        return CancelBookingResponse(
+            booking_id=res["booking"].id,
+            refund_ratio=float(res["refund_ratio"]),
+            new_status=res["new_status"],
+        )
 
-    raise HTTPException(status_code=409, detail=f"Cannot cancel booking in state {booking.status}")
+    raise HTTPException(
+        status_code=409,
+        detail=f"Cannot cancel booking in state {booking.status}",
+    )
 
 
 @router.post("/bookings/{booking_id}/confirm", response_model=BookingOut)
@@ -307,73 +349,44 @@ def get_venue_calendar(
     events.sort(key=lambda e: (e.start, e.end, e.type))
     return events
 
-@router.get("/{venue_id}/availability")
-def get_public_availability(
-    venue_id: UUID,
-    start: date,
-    end: date,
+@router.get("/bookings/{booking_id}", response_model=BookingOut)
+def get_booking(
+    booking_id: UUID,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Public endpoint used by the frontend booking page.
+    expire_old_pending_payment_bookings(db)
+    complete_past_confirmed_bookings(db)
 
-    Returns all unavailable date ranges for a venue
-    (both confirmed bookings and host availability blocks).
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
 
-    No authentication required.
-    """
-
-    if start > end:
-        raise HTTPException(status_code=400, detail="start must be before end")
-
-    venue = db.query(Venue).filter(Venue.id == venue_id).first()
+    venue = db.query(Venue).filter(Venue.id == booking.venue_id).first()
     if not venue:
         raise HTTPException(status_code=404, detail="Venue not found")
 
-    # Active bookings that overlap the requested range
+    # Authorization: only guest or host can access
+    is_guest = booking.guest_user_id == current_user.id
+    is_host = venue.host_user_id == current_user.id
+    if not (is_guest or is_host):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    return booking
+
+@router.get("/me", response_model=list[BookingOut])
+def get_my_bookings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    expire_old_pending_payment_bookings(db)
+    complete_past_confirmed_bookings(db)
+
     bookings = (
         db.query(Booking)
-        .filter(
-            Booking.venue_id == venue_id,
-            Booking.status.in_(["PENDING_PAYMENT", "CONFIRMED", "COMPLETED"]),
-            Booking.check_out > start,
-            Booking.check_in < end,
-        )
+        .filter(Booking.guest_user_id == current_user.id)
+        .order_by(Booking.created_at.desc())
         .all()
     )
 
-    # Host availability blocks
-    blocks = (
-        db.query(AvailabilityBlock)
-        .filter(
-            AvailabilityBlock.venue_id == venue_id,
-            AvailabilityBlock.end_date > start,
-            AvailabilityBlock.start_date < end,
-        )
-        .all()
-    )
-
-    unavailable = []
-
-    for b in bookings:
-        unavailable.append(
-            {
-                "type": "booking",
-                "start": b.check_in,
-                "end": b.check_out,
-            }
-        )
-
-    for b in blocks:
-        unavailable.append(
-            {
-                "type": "block",
-                "start": b.start_date,
-                "end": b.end_date,
-            }
-        )
-
-    return {
-        "venue_id": venue_id,
-        "unavailable": unavailable,
-    }
+    return bookings

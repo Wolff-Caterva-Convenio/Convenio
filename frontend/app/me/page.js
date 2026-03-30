@@ -16,6 +16,7 @@ export default function MePage() {
 
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [resetMsg, setResetMsg] = useState("");
 
   useEffect(() => {
     async function loadUser() {
@@ -61,28 +62,48 @@ export default function MePage() {
     router.push("/");
   }
 
-async function handleUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+  async function handleUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  const formData = new FormData();
-  formData.append("file", file);
+    const formData = new FormData();
+    formData.append("file", file);
 
-  try {
-    const res = await fetch("http://127.0.0.1:9000/auth/me/avatar", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-      },
-      body: formData,
-    });
+    try {
+      const res = await fetch("http://127.0.0.1:9000/auth/me/avatar", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+        body: formData,
+      });
+
+    // ✅ THIS IS THE FIX
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text);
+    }
 
     const data = await res.json();
     setUser(data);
-  } catch {
-    alert("Upload failed");
+  } catch (e) {
+    alert("Upload failed: " + e.message);
   }
 }
+
+  async function handlePasswordReset() {
+    if (!user?.email) return;
+
+    try {
+      const res = await apiFetch(`/auth/forgot-password?email=${user.email}`, {
+        method: "POST",
+      });
+
+      setResetMsg(res.message);
+    } catch (e) {
+      setResetMsg("Failed to send reset email.");
+    }
+  }
 
   async function handleDeleteAccount() {
     const confirmed = confirm(
@@ -241,9 +262,17 @@ async function handleUpload(e) {
       <div style={styles.section}>
         <h2>Account</h2>
 
-        <button onClick={handleLogout} style={styles.secondaryBtn}>
-          Log out
+        <button onClick={handlePasswordReset} style={styles.secondaryBtn}>   
+          Reset Password
         </button>
+
+        {resetMsg && <p>{resetMsg}</p>}
+
+        <div style={{ marginTop: 10 }}>
+          <button onClick={handleLogout} style={styles.secondaryBtn}>
+            Log out
+          </button>
+        </div>
       </div>
 
       {/* DELETE */}

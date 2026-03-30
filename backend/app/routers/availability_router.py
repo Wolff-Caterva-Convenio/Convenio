@@ -1,5 +1,6 @@
 from datetime import date
 from typing import List
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -26,7 +27,7 @@ ACTIVE_BOOKING_STATUSES = ["PENDING_PAYMENT", "CONFIRMED"]
     status_code=status.HTTP_201_CREATED,
 )
 def create_block_endpoint(
-    venue_id: str,
+    venue_id: UUID,
     payload: AvailabilityBlockCreate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -51,7 +52,7 @@ def create_block_endpoint(
 # LIST AVAILABILITY BLOCKS
 # -----------------------------
 @router.get("/{venue_id}/availability-blocks", response_model=List[AvailabilityBlockOut])
-def list_blocks(venue_id: str, db: Session = Depends(get_db)):
+def list_blocks(venue_id: UUID, db: Session = Depends(get_db)):
     return (
         db.query(models.AvailabilityBlock)
         .filter(models.AvailabilityBlock.venue_id == venue_id)
@@ -65,7 +66,7 @@ def list_blocks(venue_id: str, db: Session = Depends(get_db)):
 # -----------------------------
 @router.delete("/availability-blocks/{block_id}")
 def delete_block(
-    block_id: str,
+    block_id: UUID,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -109,7 +110,7 @@ def delete_block(
 # -----------------------------
 @router.get("/{venue_id}/availability-check")
 def check_availability(
-    venue_id: str,
+    venue_id: UUID,
     check_in: date,
     check_out: date,
     db: Session = Depends(get_db),
@@ -156,7 +157,7 @@ def check_availability(
 # -----------------------------
 @router.get("/{venue_id}/availability")
 def get_public_availability(
-    venue_id: str,
+    venue_id: UUID,
     start: date = Query(..., description="Start of window (YYYY-MM-DD)"),
     end: date = Query(..., description="End of window (YYYY-MM-DD)"),
     db: Session = Depends(get_db),

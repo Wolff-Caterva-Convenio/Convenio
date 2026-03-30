@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import BookingCard from "../../components/BookingCard";
 import VenueGallery from "../../components/VenueGallery";
 
 export default function VenuePage() {
   const params = useParams();
   const venueId = params?.venue_id;
+
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
 
   const API_BASE = useMemo(
     () => process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:9000",
@@ -47,7 +51,6 @@ export default function VenuePage() {
         return await res.json();
       }
 
-      // Fallback for Host View (if venue is private/draft but belongs to user)
       const token = localStorage.getItem("access_token");
       if (token && meData) {
         const mineRes = await fetch(`${API_BASE}/venues/mine`, {
@@ -102,7 +105,9 @@ export default function VenuePage() {
     return (
       <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
         <h1 style={{ marginBottom: 12 }}>Venue</h1>
-        <div style={{ color: "crimson", whiteSpace: "pre-wrap" }}>{error || "Venue not found."}</div>
+        <div style={{ color: "crimson", whiteSpace: "pre-wrap" }}>
+          {error || "Venue not found."}
+        </div>
         <div style={{ marginTop: 16 }}>
           <Link href="/venues">← Back to venues</Link>
         </div>
@@ -112,7 +117,6 @@ export default function VenuePage() {
 
   return (
     <main style={{ maxWidth: 1100, margin: "40px auto", padding: "0 20px", fontFamily: "system-ui" }}>
-      {/* Calendar Global Styles */}
       <style>{`
         .rdp-day_selected:not(.rdp-day_outside) { 
           background-color: blue !important; 
@@ -153,7 +157,7 @@ export default function VenuePage() {
               gap: 24,
             }}
           >
-            {/* LEFT COLUMN: Venue Details */}
+            {/* LEFT COLUMN */}
             <div>
               <h1 style={{ marginTop: 0, marginBottom: 10 }}>{venue.title}</h1>
               <div style={{ marginBottom: 8 }}>
@@ -185,11 +189,13 @@ export default function VenuePage() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN: The Refactored Booking Card */}
-            <BookingCard 
-              venue={venue} 
-              me={me} 
-              API_BASE={API_BASE} 
+            {/* RIGHT COLUMN */}
+            <BookingCard
+              venue={venue}
+              me={me}
+              API_BASE={API_BASE}
+              initialFrom={from}
+              initialTo={to}
             />
           </div>
         </div>

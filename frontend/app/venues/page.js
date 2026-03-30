@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import VenueGallery from "../components/VenueGallery";
-import BookingCard from "../components/BookingCard";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
 
 const CATEGORIES = [
   "Art & Culture",
@@ -17,13 +17,10 @@ const CATEGORIES = [
 
 function getCardImagePath(v) {
   const images = Array.isArray(v?.images) ? v.images : [];
-
   const explicitCover = images.find((img) => img?.is_cover && img?.image_url);
   if (explicitCover?.image_url) return explicitCover.image_url;
-
   const firstGalleryImage = images.find((img) => img?.image_url);
   if (firstGalleryImage?.image_url) return firstGalleryImage.image_url;
-
   return v?.image_url || null;
 }
 
@@ -40,15 +37,30 @@ export default function VenuesPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // --- NEW: Dropdown Range State ---
+  const [range, setRange] = useState();
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
+  // Safely derive string dates from the range object
+  const fromDate = range?.from ? range.from.toISOString().slice(0, 10) : "";
+  const toDate = range?.to ? range.to.toISOString().slice(0, 10) : "";
+
   async function loadVenues() {
     setError("");
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/venues/search`, {
-        cache: "no-store",
-      });
+      let url = `${API_BASE}/venues/search`;
+      const params = new URLSearchParams();
 
+      if (fromDate) params.append("from_date", fromDate);
+      if (toDate) params.append("to_date", toDate);
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) {
         throw new Error(await res.text());
       }
@@ -57,15 +69,18 @@ export default function VenuesPage() {
       const safeData = Array.isArray(data) ? data : [];
 
       setVenues(safeData);
-      setFilteredVenues(safeData);
+      applyFilters(selectedCategory, search, safeData);
+    } catch (err) {
+      setError(err?.message || String(err));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadVenues().catch((e) => setError(e?.message || String(e)));
-  }, [API_BASE]);
+    loadVenues();
+    // Re-fetch automatically when derived dates change
+  }, [API_BASE, fromDate, toDate]); 
 
   function applyFilters(category, searchText, sourceVenues = venues) {
     let result = [...sourceVenues];
@@ -76,7 +91,6 @@ export default function VenuesPage() {
 
     if (searchText) {
       const q = searchText.toLowerCase();
-
       result = result.filter(
         (v) =>
           (v.title || "").toLowerCase().includes(q) ||
@@ -89,9 +103,7 @@ export default function VenuesPage() {
   }
 
   function selectCategory(categoryLabel) {
-    const newCategory =
-      categoryLabel === selectedCategory ? null : categoryLabel;
-
+    const newCategory = categoryLabel === selectedCategory ? null : categoryLabel;
     setSelectedCategory(newCategory);
     applyFilters(newCategory, search);
   }
@@ -107,44 +119,149 @@ export default function VenuesPage() {
         maxWidth: 1100,
         margin: "40px auto",
         padding: "0 20px",
-        fontFamily: "system-ui",
+        fontFamily: "system-ui, -apple-system, sans-serif",
       }}
     >
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ margin: 0, marginBottom: 10 }}>Discover venues</h1>
-        <div style={{ fontSize: 15, opacity: 0.75 }}>
+        <h1 style={{ margin: 0, marginBottom: 10, fontSize: "2rem", fontWeight: 800 }}>Discover venues</h1>
+        <div style={{ fontSize: 16, color: "#666" }}>
           Browse by category or explore all available venues.
         </div>
       </div>
 
-      {error ? (
-        <div style={{ color: "crimson", marginBottom: 16, whiteSpace: "pre-wrap" }}>
+      {error && (
+        <div style={{ padding: 12, background: "#fee2e2", color: "#b91c1c", borderRadius: 8, marginBottom: 24, fontWeight: 500 }}>
           {error}
         </div>
-      ) : null}
+      )}
 
-      <div style={{ marginBottom: 24 }}>
-        <input
-          placeholder="Search venues, cities, or ideas..."
-          value={search}
-          onChange={(e) => updateSearch(e.target.value)}
-          style={{
-            width: "100%",
-            maxWidth: 500,
-            padding: "10px 14px",
-            borderRadius: 10,
-            border: "1px solid #ccc",
-            fontSize: 15,
-          }}
-        />
+      {/* 🔍 SEARCH + DATES CONTAINER */}
+      <div style={{ 
+        marginBottom: 32, 
+        display: "flex", 
+        gap: 12, 
+        flexWrap: "wrap", 
+        alignItems: "center", 
+        background: "#f9fafb", 
+        padding: 16, 
+        borderRadius: 16, 
+        border: "1px solid #e5e7eb" 
+      }}>
+        
+        {/* TEXT SEARCH */}
+        <div style={{ flex: 1, minWidth: 250, display: "flex", alignItems: "center", background: "white", borderRadius: 10, border: "1px solid #d1d5db", padding: "0 12px" }}>
+          <span style={{ fontSize: 18, marginRight: 8 }}>🔍</span>
+          <input
+            placeholder="Search venues, cities, or ideas..."
+            value={search}
+            onChange={(e) => updateSearch(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px 0",
+              border: "none",
+              outline: "none",
+              fontSize: 15,
+              background: "transparent"
+            }}
+          />
+        </div>
+
+        {/* 🗓️ DATE DROPDOWN */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setIsCalendarOpen((v) => !v)}
+            style={{
+              padding: "12px 16px",
+              borderRadius: 10,
+              border: isCalendarOpen ? "1px solid #000" : "1px solid #d1d5db",
+              background: "white",
+              cursor: "pointer",
+              minWidth: 220,
+              textAlign: "left",
+              fontSize: 15,
+              fontWeight: 500,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              transition: "all 0.2s",
+              boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+            }}
+          >
+            <span>
+              🗓️ {fromDate && toDate ? `${fromDate} → ${toDate}` : "Select dates"}
+            </span>
+            <span style={{ fontSize: 12, transform: isCalendarOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▼</span>
+          </button>
+
+          {isCalendarOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 8px)",
+                right: 0,
+                zIndex: 100,
+                background: "white",
+                border: "1px solid #e5e7eb",
+                borderRadius: 16,
+                padding: 16,
+                boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)"
+              }}
+            >
+              <DayPicker
+                mode="range"
+                selected={range}
+                onSelect={(r) => setRange(r)}
+                numberOfMonths={1}
+                disabled={(date) => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  return date <= today;
+                }}
+              />
+
+              <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button
+                  onClick={() => setRange(undefined)}
+                  style={{
+                    padding: "8px 12px",
+                    fontSize: 14,
+                    color: "#6b7280",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontWeight: 500
+                  }}
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setIsCalendarOpen(false)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: "#000",
+                    color: "white",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: 14
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* CATEGORY FILTER */}
       <div
         style={{
           display: "flex",
-          gap: 10,
+          gap: 8,
           flexWrap: "wrap",
-          marginBottom: 28,
+          marginBottom: 32,
           alignItems: "center",
         }}
       >
@@ -154,14 +271,15 @@ export default function VenuesPage() {
             applyFilters(null, search);
           }}
           style={{
-            padding: "10px 16px",
+            padding: "8px 16px",
             borderRadius: 999,
-            border:
-              selectedCategory === null
-                ? "2px solid black"
-                : "1px solid #ccc",
-            background: "white",
+            border: selectedCategory === null ? "1px solid #000" : "1px solid #e5e7eb",
+            background: selectedCategory === null ? "#000" : "white",
+            color: selectedCategory === null ? "white" : "#374151",
             cursor: "pointer",
+            fontWeight: selectedCategory === null ? 600 : 500,
+            fontSize: 14,
+            transition: "all 0.2s"
           }}
         >
           All
@@ -172,14 +290,15 @@ export default function VenuesPage() {
             key={category}
             onClick={() => selectCategory(category)}
             style={{
-              padding: "10px 16px",
+              padding: "8px 16px",
               borderRadius: 999,
-              border:
-                selectedCategory === category
-                  ? "2px solid black"
-                  : "1px solid #ccc",
-              background: "white",
+              border: selectedCategory === category ? "1px solid #000" : "1px solid #e5e7eb",
+              background: selectedCategory === category ? "#000" : "white",
+              color: selectedCategory === category ? "white" : "#374151",
               cursor: "pointer",
+              fontWeight: selectedCategory === category ? 600 : 500,
+              fontSize: 14,
+              transition: "all 0.2s"
             }}
           >
             {category}
@@ -187,16 +306,23 @@ export default function VenuesPage() {
         ))}
       </div>
 
+      {/* RESULTS */}
       {loading ? (
-        <div style={{ fontSize: 16, opacity: 0.8 }}>Loading venues...</div>
+        <div style={{ display: "flex", justifyContent: "center", padding: "40px 0", color: "#6b7280", fontSize: 16, fontWeight: 500 }}>
+          Loading venues...
+        </div>
       ) : filteredVenues.length === 0 ? (
-        <div style={{ fontSize: 16, opacity: 0.8 }}>No venues found.</div>
+        <div style={{ textAlign: "center", padding: "60px 0", background: "#f9fafb", borderRadius: 16, border: "1px dashed #d1d5db" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🏜️</div>
+          <h3 style={{ margin: "0 0 8px 0", color: "#111827" }}>No venues found</h3>
+          <div style={{ color: "#6b7280", fontSize: 15 }}>Try adjusting your filters or selecting different dates.</div>
+        </div>
       ) : (
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: 20,
+            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+            gap: 24,
           }}
         >
           {filteredVenues.map((v) => {
@@ -205,77 +331,75 @@ export default function VenuesPage() {
             const priceCents = Number(v?.payout_net_per_night ?? 0);
 
             return (
-              <div
+              <Link
+                href={`/venues/${v.id}${
+                  fromDate && toDate ? `?from=${fromDate}&to=${toDate}` : ""
+                }`}
                 key={v.id}
                 style={{
-                  border: "1px solid #ddd",
+                  border: "1px solid #e5e7eb",
                   borderRadius: 16,
                   overflow: "hidden",
                   background: "white",
                   display: "flex",
                   flexDirection: "column",
+                  textDecoration: "none",
+                  color: "inherit",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)";
+                  e.currentTarget.style.boxShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.1)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 4px 6px -1px rgba(0, 0, 0, 0.05)";
                 }}
               >
                 {imageUrl ? (
                   <img
                     src={imageUrl}
                     alt={v.title || "Venue image"}
-                    style={{
-                      height: 160,
-                      width: "100%",
-                      objectFit: "cover",
-                    }}
+                    style={{ height: 200, width: "100%", objectFit: "cover" }}
                   />
                 ) : (
                   <div
                     style={{
-                      height: 160,
-                      background:
-                        "linear-gradient(135deg, #e5e5e5 0%, #f5f5f5 100%)",
+                      height: 200,
+                      background: "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 13,
-                      color: "#777",
+                      fontSize: 14,
+                      color: "#9ca3af",
+                      fontWeight: 500
                     }}
                   >
                     Image coming soon
                   </div>
                 )}
 
-                <div style={{ padding: 16 }}>
-                  <div
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 700,
-                      marginBottom: 6,
-                    }}
-                  >
+                <div style={{ padding: 20, display: "flex", flexDirection: "column", flex: 1 }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: "#111827" }}>
                     {v.title}
                   </div>
 
-                  <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
-                    {v.city} · cap {v.capacity}
+                  <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 12 }}>
+                    {v.city} · Up to {v.capacity} guests
                   </div>
 
-                  <div style={{ fontSize: 14, marginBottom: 10 }}>
-                    €{(priceCents / 100).toFixed(2)} / night
+                  <div style={{ marginTop: "auto" }}>
+                     <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6, display: "inline-block", padding: "4px 10px", background: "#f3f4f6", borderRadius: 999 }}>
+                      {v.venue_category || "Uncategorized"}
+                      {v.venue_type ? ` · ${v.venue_type}` : ""}
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: "#111827" }}>
+                      €{(priceCents / 100).toFixed(2)} <span style={{ fontWeight: 400, fontSize: 14, color: "#6b7280" }}>/ night</span>
+                    </div>
                   </div>
-
-                  <div
-                    style={{
-                      fontSize: 12,
-                      opacity: 0.7,
-                      marginBottom: 12,
-                    }}
-                  >
-                    {v.venue_category || "Uncategorized"}
-                    {v.venue_type ? ` · ${v.venue_type}` : ""}
-                  </div>
-
-                  <Link href={`/venues/${v.id}`}>View venue</Link>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

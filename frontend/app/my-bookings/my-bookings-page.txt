@@ -43,40 +43,43 @@ export default function MyBookingsPage() {
   // Modal states
   const [preview, setPreview] = useState(null); 
   const [reviewModal, setReviewModal] = useState(null); 
+  const [reviewStatusMap, setReviewStatusMap] = useState({});
 
   // ✅ STAR RATING STATE
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
-  const [reviewMap, setReviewMap] = useState({});
 
   /**
    * Loads review eligibility for each booking.
    */
+  async function loadReviewStatuses(bookingsArray) {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
 
-async function loadReviews(bookingsArray) {
-  const token = localStorage.getItem("access_token");
-  if (!token) return;
+    try {
+      const results = await Promise.all(
+        bookingsArray.map(async (b) => {
+          const res = await fetch(
+            `${API_BASE}/bookings/${b.id}/review-status`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          if (!res.ok) return [b.id, false];
+          const data = await res.json();
+          return [b.id, data.already_reviewed];
+        })
+      );
 
-  try {
-    const results = await Promise.all(
-      bookingsArray.map(async (b) => {
-        const res = await fetch(`${API_BASE}/reviews/by-booking/${b.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!res.ok) return [b.id, null];
-
-        const data = await res.json();
-        return [b.id, data?.rating || null];
-      })
-    );
-
-    setReviewMap(Object.fromEntries(results));
-  } catch (err) {
-    console.error("Failed to load reviews", err);
+      setReviewStatusMap(Object.fromEntries(results));
+    } catch (err) {
+      console.error("Failed to load review statuses", err);
+    }
   }
-}
 
+  /**
+   * Loads user bookings and then checks their review statuses.
+   */
   async function loadBookings() {
     const token = localStorage.getItem("access_token");
     if (!token) {
@@ -98,7 +101,7 @@ async function loadReviews(bookingsArray) {
       const bookingsArray = Array.isArray(data) ? data : [];
 
       setBookings(bookingsArray);
-      await loadReviews(bookingsArray);
+      await loadReviewStatuses(bookingsArray);
     } finally {
       setLoading(false);
     }
@@ -139,15 +142,7 @@ async function loadReviews(bookingsArray) {
           Math.round((b.amount_guest_total || 0) * data.refund_ratio),
       });
     } catch (e) {
-      console.error("CANCEL ERROR:", e);
-
-      let msg = "Unknown error";
-      if (e instanceof Error) msg = e.message;
-      else if (typeof e === "string") msg = e;
-
-      alert("Cancel failed:\n\n" + msg); // 🔥 shows real backend error
-
-      setError(normalizeError(msg));
+      setError(normalizeError(e?.message));
     } finally {
       setBusyId(null);
     }
@@ -230,8 +225,7 @@ async function loadReviews(bookingsArray) {
                 setHoverRating(0);
                 setReviewModal(booking);
               }}
-              alreadyReviewed={!!reviewMap[b.id]}
-              rating={reviewMap[b.id]}
+              alreadyReviewed={!!reviewStatusMap[b.id]}
             />
           </div>
         );
@@ -288,8 +282,14 @@ async function loadReviews(bookingsArray) {
 
             <div style={{ display: "flex", gap: 12, marginTop: 30 }}>
               <button
-                disabled={rating === 0}
+                disabled={rating === 0 || reviewStatusMap[reviewModal?.id]}
                 onClick={async () => {
+                  // 🚨 Prevent duplicate review (frontend safety)
+                  if (reviewStatusMap[reviewModal.id]) {
+                    setError("You already reviewed this booking.");
+                    return;
+                  }
+
                   const token = localStorage.getItem("access_token");
 
                   try {
@@ -307,34 +307,21 @@ async function loadReviews(bookingsArray) {
 
                     if (!res.ok) throw new Error(await res.text());
 
-                    setReviewMap((prev) => ({
-                     ...prev,
-                     [reviewModal.id]: rating,
-                    }));
-
                     setReviewModal(null);
                     await loadBookings();
                   } catch (e) {
-                    console.error("REVIEW ERROR:", e);
-
-                    let msg = "Unknown error";
-                    if (e instanceof Error) msg = e.message;
-                    else if (typeof e === "string") msg = e;
-
-                    alert("Review failed:\n\n" + msg);
-
-                    setError(normalizeError(msg));
+                    setError(normalizeError(e.message));
                   }
                 }}
                 style={{
                   flex: 1,
-                  background: rating === 0 ? "#cbd5e1" : "#2563eb",
+                  background: rating === 0 || reviewStatusMap[reviewModal?.id] ? "#cbd5e1" : "#2563eb",
                   color: "white",
                   padding: "12px",
                   borderRadius: 8,
                   border: "none",
                   fontWeight: 600,
-                  cursor: rating === 0 ? "not-allowed" : "pointer"
+                  cursor: rating === 0 || reviewStatusMap[reviewModal?.id] ? "not-allowed" : "pointer"
                 }}
               >
                 Submit Review

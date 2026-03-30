@@ -23,12 +23,19 @@ frontend\
 
 npm run dev
 
-Migrations Commands:
+5.) Migrations Commands:
 backend\
 
 .\.venv\Scripts\alembic current
 
 .\.venv\Scripts\alembic upgrade head
+
+6.) SQL launch
+backend\
+
+backend\
+
+psql -U convenio -h 127.0.0.1 -d convenio
 
 docs login:
 HOST
@@ -42,6 +49,12 @@ GUEST
   "email": "user@example.cum",
   "password": "stringut"
 }
+
+        email    = "host@test.com"
+        password = "12345678"
+
+        email    = "guest@test.com"
+        password = "12345678"
 
 docs login via CMD:
 
@@ -62,13 +75,33 @@ Erstelle structure.txt Zusammenfassung:
 tree /f /a > structure.txt
 
 
-Erstelle backend_code.txt Zusammenfassung:
+Erstelle project_ai_code_summary.txt Code-Zusammenfassung:
 
-(Get-ChildItem backend -Recurse -Include *.py | Where-Object { $_.FullName -notmatch '\.venv' } |
+$targets = @(
+  ".\backend\app",
+  ".\backend\alembic\versions",
+  ".\frontend\app"
+)
+
+if (Test-Path .\project_ai_code_summary.txt) {
+  Remove-Item .\project_ai_code_summary.txt
+}
+
+Get-ChildItem $targets -Recurse -File |
+Where-Object {
+  $_.Extension -in ".py",".js",".ts",".tsx" -and
+  $_.FullName -notmatch '\\__pycache__\\|\\node_modules\\|\\\.next\\|\\\.git\\'
+} |
+Sort-Object FullName |
 ForEach-Object {
-"`n===== $($_.FullName.Replace((Get-Location).Path,'')) =====`n";
-Select-String -Path $_.FullName -Pattern 'class |def |APIRouter|@router|include_router|__tablename__|Column\(|ForeignKey'
-}) | Out-File backend_code.txt
+  @(
+    "===== FILE: $($_.FullName) ====="
+    ""
+    (Get-Content -LiteralPath $_.FullName -Raw)
+    ""
+    ""
+  ) | Out-File -Append .\project_ai_code_summary.txt -Encoding utf8
+}
 
 
 Github upload:

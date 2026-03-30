@@ -13,7 +13,10 @@ from app.db.models.venue import Venue
 from app.db.models.cancellation_event import CancellationEvent
 from app.services.cancellation_policy import calculate_refund_ratio
 from app.services.payout_service import create_host_transfer
-from app.services.email_service import send_cancellation_email
+from app.services.email_service import (
+    send_cancellation_email,
+    send_host_cancellation_email,
+)
 
 
 def _log_cancellation_event_and_enforce_policies(
@@ -207,7 +210,14 @@ def confirm_cancel(db: Session, current_user: User, *, booking_id: UUID) -> dict
     # If already refunded at/above desired amount, finalize cancellation idempotently,
     # AND still do the host payout if needed and not done yet.
     if already_refunded >= refund_amount:
-        if (not is_host) and host_payout > 0 and not getattr(payment, "stripe_transfer_id", None):
+        can_payout = (
+            not is_host
+            and host_payout > 0
+            and payment.refunded_amount_total >= refund_amount
+            and not getattr(payment, "stripe_transfer_id", None)
+        )
+
+        if can_payout:
             try:
                 create_host_transfer(
                     db,
@@ -246,6 +256,16 @@ def confirm_cancel(db: Session, current_user: User, *, booking_id: UUID) -> dict
                 refund_amount=refund_amount / 100
             )
 
+        # SEND HOST CANCELLATION EMAIL
+        host = db.query(User).filter(User.id == venue.host_user_id).first()
+        if host:
+            send_host_cancellation_email(
+                host_email=host.email,
+                venue_title=venue.title,
+                check_in=str(booking.check_in),
+                check_out=str(booking.check_out),
+            )
+
         return {
             "booking": booking,
             "refund_ratio": ratio,
@@ -256,29 +276,43 @@ def confirm_cancel(db: Session, current_user: User, *, booking_id: UUID) -> dict
             "new_status": booking.status,
         }
 
-    # ---- Stripe Refund (if needed) ----
-    if refund_amount > 0:
+    # ---- Stripe Refund (incremental + idempotent-safe) ----
+    incremental_refund = max(0, refund_amount - already_refunded)
+
+    if incremental_refund > 0:
         try:
             stripe.Refund.create(
                 payment_intent=payment.stripe_payment_intent_id,
-                amount=refund_amount,
+                amount=incremental_refund,
                 metadata={"booking_id": str(booking.id)},
-                idempotency_key=f"refund:{booking.id}:{refund_amount}",
+                idempotency_key=f"refund:{booking.id}:{incremental_refund}",
             )
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Stripe error: {str(e)}")
 
-        payment.refund_requested_amount = refund_amount
+        # Safety: never exceed total paid
+        if already_refunded + incremental_refund > G:
+            raise HTTPException(status_code=500, detail="Refund exceeds payment total")
+
+        payment.refund_requested_amount = incremental_refund
         payment.refund_origin = "api"
 
-        payment.refunded_amount_total = refund_amount
-        if refund_amount >= G:
+        payment.refunded_amount_total = already_refunded + incremental_refund
+
+        if payment.refunded_amount_total >= G:
             payment.status = "refunded"
         else:
             payment.status = "partially_refunded"
 
-    # ---- Host remainder payout on guest cancellation (best-effort) ----
-    if (not is_host) and host_payout > 0 and not getattr(payment, "stripe_transfer_id", None):
+    # ---- Host remainder payout (ONLY after refund consistency) ----
+    can_payout = (
+        not is_host
+        and host_payout > 0
+        and payment.refunded_amount_total >= refund_amount
+        and not getattr(payment, "stripe_transfer_id", None)
+    )
+
+    if can_payout:
         try:
             create_host_transfer(
                 db,
@@ -318,6 +352,16 @@ def confirm_cancel(db: Session, current_user: User, *, booking_id: UUID) -> dict
             check_in=str(booking.check_in),
             check_out=str(booking.check_out),
             refund_amount=refund_amount / 100
+        )
+
+    # SEND HOST CANCELLATION EMAIL
+    host = db.query(User).filter(User.id == venue.host_user_id).first()
+    if host:
+        send_host_cancellation_email(
+            host_email=host.email,
+            venue_title=venue.title,
+            check_in=str(booking.check_in),
+            check_out=str(booking.check_out),
         )
 
     return {
